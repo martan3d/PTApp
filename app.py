@@ -109,11 +109,13 @@ class PTApp(toga.App):
 
 
     async def start_discover(self, id):
-
         self.working_text.text = "Scanning for Receivers..."
 
         self.writebuff = bytearray([0x7E, 0x00, 0x04, 0x08, 0x01, 0x4E, 0x44, 0x64])
         self.writelen = len(self.writebuff)
+
+        # send everything async so we don't impact GUI timing
+
         await self.connectWrite()
         await asyncio.sleep(2)
         await self.connectRead()
@@ -122,7 +124,7 @@ class PTApp(toga.App):
         scan_content = toga.Box(style=Pack(direction=COLUMN, align_items=CENTER, margin_top=5))
         self.buttonDict = {}
 
-        # set some screen elements
+        # set some default screen elements
         scan_content.add(self.discover_button)
         scan_content.add(self.working_text)
         self.working_text.text = ""
@@ -140,14 +142,15 @@ class PTApp(toga.App):
             scan_content.add(
                 toga.Button(id=mac, text=fmstring,
                     on_press = self.connectToClient,
-                    style=Pack(width=230, height=120, margin_top=12, background_color="#bbbbbb", color="#000000", font_size=16),
-                )
+                    style=Pack(width=230, height=120, margin_top=12, background_color="#bbbbbb", color="#000000", font_size=16))
             )
 
+        # Render everything to the main window
         self.scroller = toga.ScrollContainer(content=scan_content, style=Pack(direction=COLUMN, align_items=CENTER))
         self.main_window.content = self.scroller
         self.main_window.show()
 
+    # Pressed one of the receiver scanned buttons, ask it for it's parameters
     async def connectToClient(self, widget):
         self.working_text.text = "Requesting Data from Receiver..."
         address = self.buildAddress(widget.id)
@@ -156,19 +159,21 @@ class PTApp(toga.App):
         self.writebuff = bytearray(buff)
         self.writelen = len(self.writebuff)
  
+        # do the await thing to give time to the GUI thread
         await self.connectWrite()
         await asyncio.sleep(1)
         await self.connectRead()
 
+        # find the message we need, it's a specific API response from the receiver
         message = self.parseReturnData(self.readlen, self.readbuff)
 
-        print ("message ",message)
-
-        if not message:
+        if not message:   # generally don't get it on the first try, just let user try again...
+           self.working_text.text = "Failed, try again..."
+           await asyncio.sleep(-.5)
            self.working_text.text = ""
            return
 
-        if message[3] == 129:
+        if message[3] == 129:     # got a valid one, extract the data and build the display
            self.displayWidgetScreen(widget, message)
         
     
@@ -242,7 +247,7 @@ class PTApp(toga.App):
                msg.append(data[i])
         messages.append(msg)
 
-#        for msg in messages:
+#        for msg in messages:   # DEBUG
 #            hexString = ""
 #            for m in msg:
 #                hexString = hexString + hex(m) + " "
@@ -272,13 +277,13 @@ class PTApp(toga.App):
                txdata.append(int(d))
 
         frame = []
-        frame.append(0x7e)	# header
+        frame.append(0x7e)	    # header
         frame.append(0)	        # our data is always < 256
         frame.append(dl+11)     # all data except header, length and checksum
         frame.append(0x00)      # TRANSMIT REQUEST 64bit (mac) address - send Query to Xbee module
         frame.append(0x00)      # frame ID for ack- 0 = disable
 
-        frame.append(dest[0])   # 64 bit address (mac)
+        frame.append(dest[0])   # 64 bit address (mac address of destination)
         frame.append(dest[1])
         frame.append(dest[2])
         frame.append(dest[3])
@@ -292,12 +297,13 @@ class PTApp(toga.App):
         for i in txdata:        # move data to transmit buffer
             frame.append(i)
         frame.append(0)         # checksum position
-        cks = 0;
-        for i in range(3, dl+14):	# compute checksum
-            cks += int(frame[i])
 
+        cks = 0;	            # compute checksum
+        for i in range(3, dl+14):
+            cks += int(frame[i])
         i = (255-cks) & 0x00ff
         frame[dl+14] = i        # insert checksum in message
+
         return frame
 
 
@@ -385,34 +391,43 @@ class PTApp(toga.App):
         scan_content.add(boxrowA)
         scan_content.add(boxrowB)
 
-        print (message)
-        print (message[10])
+        ########################################################################
 
-        adr = adprot[message[11]]
+        adr = adprot[message[11]]   # pull value from received message
 
+        # Render PT address on the screen
         btn    = toga.Button(id=PTID, text="Prg", on_press = self.sendPrgCommand, style=Pack(width=55, height=55, margin_top=6, background_color="#bbbbbb", color="#000000", font_size=12))
         desc   = toga.Label("Protothrottle ID", style=Pack(width=265, align_items=END, font_size=18))
         entry  = toga.TextInput(on_change=self.change_ptid, value=adr, style=Pack(height=45, justify_content="center", width=SNUMWIDTH, margin_bottom=2, font_size=18, background_color="#eeeeee", color="#000000"))
         boxrow = toga.Box(children=[desc, entry, btn], style=Pack(direction=ROW, align_items=END, margin_top=MARGINTOP))
         scan_content.add(boxrow)
 
-        addrbase = str(message[10])
+        ########################################################################
 
+        addrbase = str(message[10]) # PT base returned from receiver
+
+        # Render PT base
         btn    = toga.Button(id=BASE, text="Prg", on_press = self.sendPrgCommand, style=Pack(width=55, height=55, margin_top=6, background_color="#bbbbbb", color="#000000", font_size=12))
         desc   = toga.Label("Base ID", style=Pack(width=265, align_items=END, font_size=18))
         entry  = toga.NumberInput(on_change=self.change_ptid, value=addrbase, style=Pack(flex=1, height=45, width=SNUMWIDTH, margin_bottom=2, font_size=18, background_color="#eeeeee", color="#000000"))
         boxrow = toga.Box(children=[desc, entry, btn], style=Pack(direction=ROW, align_items=END, margin_top=MARGINTOP))
         scan_content.add(boxrow)
 
+        ########################################################################
+
         locoaddr = message[12]
         ch = message[13] << 8
-        locoaddr = locoaddr | ch
+        locoaddr = locoaddr | ch     # 16 bit loco address, this is the address that matches the PT address
 
         btn    = toga.Button(id=ADDR, text="Prg", on_press = self.sendPrgCommand, style=Pack(width=55, height=55, margin_top=6, background_color="#bbbbbb", color="#000000", font_size=12))
         desc   = toga.Label("Loco Address", style=Pack(width=244, align_items=END, font_size=18))
         entry  = toga.NumberInput(on_change=self.change_ptid, value=locoaddr, min=0, max=9999, style=Pack(justify_content="start", height=48, width=LNUMWIDTH, margin_bottom=2, font_size=18, background_color="#eeeeee", color="#000000"))
         boxrow = toga.Box(children=[desc, entry, btn], style=Pack(direction=ROW, align_items=END, margin_top=MARGINTOP))
         scan_content.add(boxrow)
+
+        #########################################################################
+
+
 
         btn0   = toga.Button(id=COND, text="OFF", on_press = self.sendPrgCommand, style=Pack(width=80, height=55, margin_top=6, background_color="#bbbbbb", color="#000000", font_size=14))
         btn1   = toga.Button(id=CONS, text="Prg", on_press = self.sendPrgCommand, style=Pack(width=55, height=55, margin_top=6, background_color="#bbbbbb", color="#000000", font_size=12))
