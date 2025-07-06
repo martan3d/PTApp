@@ -149,6 +149,7 @@ class PTApp(toga.App):
         self.main_window.show()
 
     async def connectToClient(self, widget):
+        self.working_text.text = "Requesting Data from Receiver..."
         address = self.buildAddress(widget.id)
         data = chr(RETURNTYPE) + "000000000000000000"
         buff = self.buildXbeeTransmitData(address, data)
@@ -164,14 +165,12 @@ class PTApp(toga.App):
         print ("message ",message)
 
         if not message:
-           print ("not message")
+           self.working_text.text = ""
            return
 
         if message[3] == 129:
-           print ("do screen")
            self.displayWidgetScreen(widget, message)
         
-        print ("no screen")
     
     # send message to Xbee
     async def connectWrite(self):
@@ -393,19 +392,25 @@ class PTApp(toga.App):
 
         btn    = toga.Button(id=PTID, text="Prg", on_press = self.sendPrgCommand, style=Pack(width=55, height=55, margin_top=6, background_color="#bbbbbb", color="#000000", font_size=12))
         desc   = toga.Label("Protothrottle ID", style=Pack(width=265, align_items=END, font_size=18))
-        entry  = toga.TextInput(on_change=self.change_ptid, value=adr, style=Pack(height=45, justify_content=START, width=SNUMWIDTH, margin_bottom=2, font_size=18, background_color="#eeeeee", color="#000000"))
+        entry  = toga.TextInput(on_change=self.change_ptid, value=adr, style=Pack(height=45, justify_content="center", width=SNUMWIDTH, margin_bottom=2, font_size=18, background_color="#eeeeee", color="#000000"))
         boxrow = toga.Box(children=[desc, entry, btn], style=Pack(direction=ROW, align_items=END, margin_top=MARGINTOP))
         scan_content.add(boxrow)
 
+        addrbase = str(message[10])
+
         btn    = toga.Button(id=BASE, text="Prg", on_press = self.sendPrgCommand, style=Pack(width=55, height=55, margin_top=6, background_color="#bbbbbb", color="#000000", font_size=12))
-        desc   = toga.Label("Base ID", style=Pack(width=275, align_items=END, font_size=18))
-        entry  = toga.NumberInput(on_change=self.change_ptid, style=Pack(flex=1, height=45, width=SNUMWIDTH, margin_bottom=2, font_size=18, background_color="#eeeeee", color="#000000"))
+        desc   = toga.Label("Base ID", style=Pack(width=265, align_items=END, font_size=18))
+        entry  = toga.NumberInput(on_change=self.change_ptid, value=addrbase, style=Pack(flex=1, height=45, width=SNUMWIDTH, margin_bottom=2, font_size=18, background_color="#eeeeee", color="#000000"))
         boxrow = toga.Box(children=[desc, entry, btn], style=Pack(direction=ROW, align_items=END, margin_top=MARGINTOP))
         scan_content.add(boxrow)
+
+        locoaddr = message[12]
+        ch = message[13] << 8
+        locoaddr = locoaddr | ch
 
         btn    = toga.Button(id=ADDR, text="Prg", on_press = self.sendPrgCommand, style=Pack(width=55, height=55, margin_top=6, background_color="#bbbbbb", color="#000000", font_size=12))
         desc   = toga.Label("Loco Address", style=Pack(width=244, align_items=END, font_size=18))
-        entry  = toga.NumberInput(on_change=self.change_ptid, min=0, max=9999, style=Pack(flex=1, height=48, width=LNUMWIDTH, margin_bottom=2, font_size=18, background_color="#eeeeee", color="#000000"))
+        entry  = toga.NumberInput(on_change=self.change_ptid, value=locoaddr, min=0, max=9999, style=Pack(justify_content="start", height=48, width=LNUMWIDTH, margin_bottom=2, font_size=18, background_color="#eeeeee", color="#000000"))
         boxrow = toga.Box(children=[desc, entry, btn], style=Pack(direction=ROW, align_items=END, margin_top=MARGINTOP))
         scan_content.add(boxrow)
 
@@ -417,8 +422,8 @@ class PTApp(toga.App):
         scan_content.add(boxrow)
         
         btn    = toga.Button(id=DECO, text="Prg", on_press = self.sendPrgCommand, style=Pack(width=55, height=55, margin_top=10, background_color="#bbbbbb", color="#000000", font_size=12))
-        desc   = toga.Label("DCC Addr", style=Pack(width=244, align_items=END, font_size=18))
-        passth = toga.Switch("Pass Thru", id=SVR0, value=False, on_change=self.change_ptid)
+        desc   = toga.Label("DCC Addr", style=Pack(width=160, align_items=END, font_size=18))
+        passth = toga.Switch("Fixed", id=SVR0, value=False, on_change=self.change_ptid)
         entry  = toga.NumberInput(on_change=self.change_ptid, min=0, max=9999, style=Pack(flex=1, height=48, width=LNUMWIDTH, font_size=18, background_color="#eeeeee", color="#000000"))
         boxrow = toga.Box(children=[desc, passth, entry, btn], style=Pack(direction=ROW, align_items=END, margin_top=MARGINTOP))
         scan_content.add(boxrow)
