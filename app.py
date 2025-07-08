@@ -169,12 +169,12 @@ class PTApp(toga.App):
 
         if not message:   # generally don't get it on the first try, just let user try again...
            self.working_text.text = "Failed, try again..."
-           await asyncio.sleep(-.5)
+           await asyncio.sleep(0.5)
            self.working_text.text = ""
            return
 
         if message[3] == 129:     # got a valid one, extract the data and build the display
-           self.displayWidgetScreen(widget, message)
+           self.displayMainWidgetScreen(widget, message)
         
     
     # send message to Xbee
@@ -375,7 +375,7 @@ class PTApp(toga.App):
             self.hasPermission = self.usbmanager.hasPermission(self.device)
 
 
-    def displayWidgetScreen(self, button, message):
+    def displayMainWidgetScreen(self, button, message):
         MARGINTOP = 2
         LNUMWIDTH = 64
         SNUMWIDTH = 42
@@ -427,14 +427,24 @@ class PTApp(toga.App):
 
         #########################################################################
 
+        cdir = message[16]
+        print ('cdir', cdir)
+        consist = 'OFF'
+        if cdir == 1: consist = 'FWD'
+        if cdir == 2: consist = 'REV'
 
+        consistaddr = message[14]
+        ch = message[15] << 8
+        consistaddr = consistaddr | ch
 
-        btn0   = toga.Button(id=COND, text="OFF", on_press = self.sendPrgCommand, style=Pack(width=80, height=55, margin_top=6, background_color="#bbbbbb", color="#000000", font_size=14))
+        btn0   = toga.Button(id=COND, text=consist, on_press = self.sendPrgCommand, style=Pack(width=80, height=55, margin_top=6, background_color="#bbbbbb", color="#000000", font_size=14))
         btn1   = toga.Button(id=CONS, text="Prg", on_press = self.sendPrgCommand, style=Pack(width=55, height=55, margin_top=6, background_color="#bbbbbb", color="#000000", font_size=12))
         desc   = toga.Label("Consist Address", style=Pack(width=164, align_items=END, font_size=18))
-        entry  = toga.NumberInput(on_change=self.change_ptid, min=0, max=9999, style=Pack(flex=1, height=48, width=LNUMWIDTH, font_size=18, background_color="#eeeeee", color="#000000"))
+        entry  = toga.NumberInput(on_change=self.change_ptid, value=consistaddr, min=0, max=9999, style=Pack(flex=1, height=48, width=LNUMWIDTH, font_size=18, background_color="#eeeeee", color="#000000"))
         boxrow = toga.Box(children=[desc, btn0, entry, btn1], style=Pack(direction=ROW, align_items=END, margin_top=MARGINTOP))
         scan_content.add(boxrow)
+
+        # ??
         
         btn    = toga.Button(id=DECO, text="Prg", on_press = self.sendPrgCommand, style=Pack(width=55, height=55, margin_top=10, background_color="#bbbbbb", color="#000000", font_size=12))
         desc   = toga.Label("DCC Addr", style=Pack(width=160, align_items=END, font_size=18))
@@ -443,12 +453,50 @@ class PTApp(toga.App):
         boxrow = toga.Box(children=[desc, passth, entry, btn], style=Pack(direction=ROW, align_items=END, margin_top=MARGINTOP))
         scan_content.add(boxrow)
 
+        wdog = 0  #adprot[message[11]]   # pull value from received message
+
+        # WatchDog
+        btn    = toga.Button(id=WDOG, text="Prg", on_press = self.sendPrgCommand, style=Pack(width=55, height=55, margin_top=6, background_color="#bbbbbb", color="#000000", font_size=12))
+        desc   = toga.Label("Watch Dog", style=Pack(width=265, align_items=END, font_size=18))
+        entry  = toga.TextInput(on_change=self.change_ptid, value=wdog, style=Pack(height=45, justify_content="center", width=SNUMWIDTH, margin_bottom=2, font_size=18, background_color="#eeeeee", color="#000000"))
+        boxrow = toga.Box(children=[desc, entry, btn], style=Pack(direction=ROW, align_items=END, margin_top=MARGINTOP))
+        scan_content.add(boxrow)
+
+        servos = Button(
+            'Servos',
+            on_press=self.displayScreen,
+            style=Pack(width=120, height=60, margin_top=6, background_color="#cccccc", color="#000000", font_size=12)
+        )
+
+        physics = Button(
+            'Physics',
+            on_press=self.displayScreen,
+            style=Pack(width=120, height=60, margin_top=6, background_color="#cccccc", color="#000000", font_size=12)
+        )
+
+        notches = Button(
+            'Notches',
+            on_press=self.displayScreen,
+            style=Pack(width=120, height=60, margin_top=6, background_color="#cccccc", color="#000000", font_size=12)
+        )
+
+        boxrow = toga.Box(children=[servos, physics, notches], style=Pack(direction=ROW, align_items=END, margin_top=MARGINTOP))
+        scan_content.add(boxrow)
+
         self.scroller = toga.ScrollContainer(content=scan_content, style=Pack(direction=COLUMN, align_items=CENTER))
         self.main_window.content = self.scroller
         self.main_window.show()
 
 
-    def sendPrgCommand(self, widget):
+    def displayScreen(self, widget):
+        pass
+
+    def sendPrgCommand(self, value):
+
+        match value:
+            case WDOG:
+                 pass
+
         pass
 
     def change_ptid(self, widget):
