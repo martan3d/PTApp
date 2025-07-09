@@ -199,6 +199,9 @@ class PTApp(toga.App):
         # find the message we need, it's a specific API response from the receiver
         self.message = self.parseReturnData(self.readlen, self.readbuff)
 
+        # save the mac address
+        self.macAddress = widget.id
+
         if not self.message:   # generally don't get it on the first try, just let user try again...
            self.working_text.text = "Failed, try again..."
            await asyncio.sleep(0.5)
@@ -388,6 +391,8 @@ class PTApp(toga.App):
 
 
     # check for permission from the user and wait if required
+    # NOTE: This will hang here if you choose 'no' when it asks you for permission
+
     def checkPermission(self):
         ACTION_USB_PERMISSION = "com.access.device.USB_PERMISSION"
         intent = Intent(ACTION_USB_PERMISSION)
@@ -423,9 +428,9 @@ class PTApp(toga.App):
         scan_content.add(boxrowA)
         scan_content.add(boxrowB)
 
-        ########################################################################
+        ########################################################################  Build Receiver Main Screen
 
-        adr = adprot[message[11]]   # pull value from received message
+        adr = adprot[message[11]]   # pull value from received message, PT Main Address
 
         # Render PT address on the screen
         btn    = toga.Button(id=PTID, text="Prg", on_press = self.sendPrgCommand, style=Pack(width=55, height=55, margin_top=6, background_color="#bbbbbb", color="#000000", font_size=12))
@@ -434,7 +439,7 @@ class PTApp(toga.App):
         boxrow = toga.Box(children=[desc, entry, btn], style=Pack(direction=ROW, align_items=END, margin_top=MARGINTOP))
         scan_content.add(boxrow)
 
-        ########################################################################
+        ######################################################################## PT Base Address
 
         addrbase = str(message[10]) # PT base returned from receiver
 
@@ -445,7 +450,7 @@ class PTApp(toga.App):
         boxrow = toga.Box(children=[desc, entry, btn], style=Pack(direction=ROW, align_items=END, margin_top=MARGINTOP))
         scan_content.add(boxrow)
 
-        ########################################################################
+        ######################################################################## Loco Address, the address on the PT that the receiver responds to
 
         locoaddr = message[12]
         ch = message[13] << 8
@@ -457,7 +462,7 @@ class PTApp(toga.App):
         boxrow = toga.Box(children=[desc, entry, btn], style=Pack(direction=ROW, align_items=END, margin_top=MARGINTOP))
         scan_content.add(boxrow)
 
-        #########################################################################
+        ######################################################################### Consist Address and setting
 
         cdir = message[16]
         consist = 'OFF'
@@ -512,6 +517,8 @@ class PTApp(toga.App):
         boxrow = toga.Box(style=Pack(direction=ROW, align_items=END, margin_top=MARGINTOP, height=40))
         scan_content.add(boxrow)
 
+        self.buttonSave = button
+
         scan = Button(
             'Scan',
             on_press=self.displayMainWindow,
@@ -521,19 +528,19 @@ class PTApp(toga.App):
         servos = Button(
             'Servos',
             id=button.id,
-            on_press=self.displayServoScreen,
+            on_press=self.callServoScreen,
             style=Pack(width=90, height=60, margin_top=6, background_color="#cccccc", color="#000000", font_size=12)
         )
 
         physics = Button(
             'Physics',
-            on_press=self.displayScreen,
+            on_press=self.callPhysicsScreen,
             style=Pack(width=90, height=60, margin_top=6, background_color="#cccccc", color="#000000", font_size=12)
         )
 
         notches = Button(
             'Notch',
-            on_press=self.displayScreen,
+            on_press=self.callNotchesScreen,
             style=Pack(width=90, height=60, margin_top=6, background_color="#cccccc", color="#000000", font_size=12)
         )
 
@@ -544,24 +551,29 @@ class PTApp(toga.App):
         self.main_window.content = self.scroller
         self.main_window.show()
 
-
-    def displayScreen(self, widget):
-        pass
-
     def sendPrgCommand(self, value):
-
-        match value:
-            case WDOG:
-                 pass
-
         pass
 
     def change_ptid(self, widget):
         pass
 
+    def callMainWidgetWindow(self, widget):
+        self.displayMainWidgetScreen(widget, self.message)
+
+    def callServoScreen(self, widget):
+        self.displayServoScreen(self.buttonSave, self.message)
+
+    def callPhysicsScreen(self, widget):
+        self.displayPhysicsScreen(self.buttonSave, self.message)
+
+    def callNotchesScreen(self, widget):
+        self.displayNotchesScreen(self.buttonSave, self.message)
+
+
+    #####################################################################
 
     # Servo Configure Screen
-    def displayServoScreen(self, button):
+    def displayServoScreen(self, button, message):
 
         MARGINTOP = 2
         LNUMWIDTH = 64
@@ -719,7 +731,48 @@ class PTApp(toga.App):
         main = Button(
             'Main',
             id=button.id,
-            on_press=self.callMainWindow,
+            on_press=self.callMainWidgetWindow,
+            style=Pack(width=120, height=60, margin_top=6, background_color="#cccccc", color="#000000", font_size=12)
+        )
+
+        boxrow = toga.Box(children=[scan, main], style=Pack(direction=ROW, align_items=CENTER, margin_top=MARGINTOP))
+        scan_content.add(boxrow)
+
+        self.scroller = toga.ScrollContainer(content=scan_content, style=Pack(direction=COLUMN, align_items=CENTER))
+        self.main_window.content = self.scroller
+        self.main_window.show()
+
+
+    def setLimit(self, id):
+        pass
+
+
+    def displayPhysicsScreen(self, button, message):
+        MARGINTOP = 2
+        LNUMWIDTH = 64
+        SNUMWIDTH = 42
+
+        scan_content = toga.Box(style=Pack(direction=COLUMN, margin=30))
+
+        # Ascii ID and Mac at top of display
+        idlabel  = toga.Label(self.buttonDict[button.id], style=Pack(flex=1, color="#000000", align_items=CENTER, font_size=32))
+        maclabel = toga.Label(button.id, style=Pack(flex=1, color="#000000", align_items=CENTER, font_size=12))
+        boxrowA  = toga.Box(children=[idlabel], style=Pack(direction=ROW, align_items=END, margin_top=4))
+        boxrowB  = toga.Box(children=[maclabel], style=Pack(direction=ROW, align_items=END, margin_top=2))
+
+        scan_content.add(boxrowA)
+        scan_content.add(boxrowB)
+
+        scan = Button(
+            'Scan',
+            on_press=self.displayMainWindow,
+            style=Pack(width=120, height=60, margin_top=6, background_color="#cccccc", color="#000000", font_size=12)
+        )
+
+        main = Button(
+            'Main',
+            id=button.id,
+            on_press=self.callMainWidgetWindow,
             style=Pack(width=120, height=60, margin_top=6, background_color="#cccccc", color="#000000", font_size=12)
         )
 
@@ -732,13 +785,47 @@ class PTApp(toga.App):
         self.main_window.show()
 
 
-    def callMainWindow(self, widget):
-        self.displayMainWidgetScreen(widget, self.message)
-        
-       
+    def displayNotchesScreen(self, button, message):
+        MARGINTOP = 2
+        LNUMWIDTH = 64
+        SNUMWIDTH = 42
 
-    def setLimit(self, id):
-        pass
+        scan_content = toga.Box(style=Pack(direction=COLUMN, margin=30))
+
+        # Ascii ID and Mac at top of display
+        idlabel  = toga.Label(self.buttonDict[button.id], style=Pack(flex=1, color="#000000", align_items=CENTER, font_size=32))
+        maclabel = toga.Label(button.id, style=Pack(flex=1, color="#000000", align_items=CENTER, font_size=12))
+        boxrowA  = toga.Box(children=[idlabel], style=Pack(direction=ROW, align_items=END, margin_top=4))
+        boxrowB  = toga.Box(children=[maclabel], style=Pack(direction=ROW, align_items=END, margin_top=2))
+
+        scan_content.add(boxrowA)
+        scan_content.add(boxrowB)
+
+        scan = Button(
+            'Scan',
+            on_press=self.displayMainWindow,
+            style=Pack(width=120, height=60, margin_top=6, background_color="#cccccc", color="#000000", font_size=12)
+        )
+
+        main = Button(
+            'Main',
+            id=button.id,
+            on_press=self.callMainWidgetWindow,
+            style=Pack(width=120, height=60, margin_top=6, background_color="#cccccc", color="#000000", font_size=12)
+        )
+
+
+        boxrow = toga.Box(children=[scan, main], style=Pack(direction=ROW, align_items=CENTER, margin_top=MARGINTOP))
+        scan_content.add(boxrow)
+
+        self.scroller = toga.ScrollContainer(content=scan_content, style=Pack(direction=COLUMN, align_items=CENTER))
+        self.main_window.content = self.scroller
+        self.main_window.show()
+
+
+
+
+
 
 def main():
     return PTApp()
