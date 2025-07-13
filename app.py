@@ -8,6 +8,8 @@ from toga.style import Pack
 from toga import Button, MultilineTextInput, Label, TextInput
 from toga.style.pack import COLUMN, ROW, CENTER, RIGHT, LEFT, START, END
 
+from .xbee import *
+
 if toga.platform.current_platform == 'android':
    from java import jclass
    from android.content import Context
@@ -117,11 +119,18 @@ adprot = { 0x30 :'A', 0x31 :'B', 0x32 :'C', 0x33 :'D', 0x34 :'E', 0x35 :'F', 0x3
 class PTApp(toga.App):
 
     def startup(self):
+
+        self.Xbee = xbeeController()
+
         self.main_window = toga.MainWindow(title=self.formal_name)
         self.setupAndroidSerialPort()
         self.displayMainWindow(0)
 
+
+
     def displayMainWindow(self, id):
+
+        self.retries = 0
 
         self.discover_button = Button(
             'Scan',
@@ -162,7 +171,7 @@ class PTApp(toga.App):
         self.working_text.text = ""
 
         # may be several responses, turn data into list of xbee api frames
-        messages = self.parseMessageData(self.readlen, self.readbuff)
+        messages = await self.parseMessageData(self.readlen, self.readbuff)
 
         # for each message, pull out the mac address and ascii node id
         for mac in messages:
@@ -182,22 +191,48 @@ class PTApp(toga.App):
         self.main_window.content = self.scroller
         self.main_window.show()
 
-    # Pressed one of the receiver scanned buttons, ask it for it's parameters
+    # Pressed one of the receiver scanned buttons, so ask it for it's parameters
     async def connectToClient(self, widget):
         self.working_text.text = "Requesting Data from Receiver..."
-        address = self.buildAddress(widget.id)
+
+        address = self.Xbee.buildAddress(widget.id)
         data = chr(RETURNTYPE) + "000000000000000000"
-        buff = self.buildXbeeTransmitData(address, data)
+        buff = self.Xbee.buildXbeeTransmitData(address, data)
+
         self.writebuff = bytearray(buff)
         self.writelen = len(self.writebuff)
  
         # do the await thing to give time to the GUI thread
         await self.connectWrite()
         await asyncio.sleep(1)
+
+#        print ("XBEE PROTOTHROTTLE REQUEST")
+
+#        start = 16
+#        length = 12
+#        laddr = start & 0x00ff
+#        haddr = (start & 0xff00) >> 8
+
+        # now send a PT exclusive message out, memory read and see what comes back
+#        xbeeMessage = self.Xbee.xbeeBroadCastRequest(48, 154, [ord('R'), laddr, haddr, length])
+
+#        self.writebuff = bytearray(xbeeMessage)
+#        self.writelen = len(self.writebuff)
+
+        # do the await thing to give time to the GUI thread
+#        await self.connectWrite()
+#        await asyncio.sleep(1)
+
+        # one or the other will answer
         await self.connectRead()
 
         # find the message we need, it's a specific API response from the receiver
-        self.message = self.parseReturnData(self.readlen, self.readbuff)
+        self.message = await self.parseReturnData(self.readlen, self.readbuff)
+
+        print ("self.message ", self.message)
+
+        # save the mac address
+        self.macAddress = widget.id
 
         if not self.message:   # generally don't get it on the first try, just let user try again...
            self.working_text.text = "Failed, try again..."
@@ -207,7 +242,7 @@ class PTApp(toga.App):
 
         if self.message[3] == 129:     # got a valid one, extract the data and build the display
            self.displayMainWidgetScreen(widget, self.message)
-        
+       
     
     # send message to Xbee
     async def connectWrite(self):
@@ -218,21 +253,8 @@ class PTApp(toga.App):
         self.readbuff = bytearray(DEFAULT_READ_BUFFER_SIZE)
         self.readlen  = self.connection.bulkTransfer(self.readEndpoint, self.readbuff, DEFAULT_READ_BUFFER_SIZE, USB_READ_TIMEOUT_MILLIS)
 
-    # Convert MAC address to Xbee message format
-    def buildAddress(self, address):
-        dest    = [0,0,0,0,0,0,0,0]
-        dest[0] = int(address[:2], 16)           # very brute force way to pull this out!
-        dest[1] = int(address[2:4], 16)
-        dest[2] = int(address[4:6], 16)
-        dest[3] = int(address[6:8], 16)
-        dest[4] = int(address[8:10], 16)
-        dest[5] = int(address[10:12], 16)
-        dest[6] = int(address[12:14], 16)
-        dest[7] = int(address[14:16], 16)
-        return dest
-
     # Parse data and make a list of Node Discovery return messages
-    def parseMessageData(self, size, data):
+    async def parseMessageData(self, size, data):
         messages = []
         msg = []
         if size > 0:
@@ -247,6 +269,7 @@ class PTApp(toga.App):
         messages.append(msg)
 
         self.nodeData = {}
+        self.Protothrottle = {}
 
         if len(messages) <= 0: 
            return self.nodeData
@@ -254,18 +277,23 @@ class PTApp(toga.App):
         for msg in messages:
             mac = ""
             id  = ""
+            adr16 = ""
             if len(msg) > 20:
-               if msg[3] != 129:
+               if msg[3] != 129:                  # Node discovery returned message, mac and ascii ID
                   for i in range(10, 18):
                      mac = mac + "{:02X}".format(msg[i])
                   for i in range(19, len(msg)-2):
                      id = id + chr(msg[i])
                   self.nodeData[mac] = id
+               elif msg[7] == 2:                  # otherwise, it's broadcast data fram from PT, save 16 bit addr (always 0000?)
+                  for i in range(4, 5):
+                     adr16 = adr16 + "{:02X}".format(msg[i])
+                  self.Protothrottle[adr16] = adr16
         return self.nodeData
 
 
     # Parse return data looking for 16 bit return and EEprom data
-    def parseReturnData(self, size, data):
+    async def parseReturnData(self, size, data):
         messages = []
         msg = []
         if size > 0:
@@ -289,54 +317,17 @@ class PTApp(toga.App):
            return []
 
         for msg in messages:
-            mac = ""
-            id  = ""
             if len(msg) > 20:
                if msg[3] == 129 and msg[9] == 87:   # must be 16 bit return packet and a 'W' in the message to be valid
                   return msg
+
+        # otherwise, see if there is a protothrottle return memory message in the list
+        for msg in messages:
+          if len(msg) > 13:
+             if msg[13] == 0x72 and msg[7] == 2:   # lower case 'r' and broadcast
+                return msg
+
         return []
-
-
-
-    # create a valid transmit frame for Xbee API message
-    def buildXbeeTransmitData(self, dest, data):
-        txdata = []
-        dl = len(data)
-        for d in data:     # make sure it's in valid bytes for transmit
-            try:
-               txdata.append(int(ord(d)))
-            except:
-               txdata.append(int(d))
-
-        frame = []
-        frame.append(0x7e)	    # header
-        frame.append(0)	        # our data is always < 256
-        frame.append(dl+11)     # all data except header, length and checksum
-        frame.append(0x00)      # TRANSMIT REQUEST 64bit (mac) address - send Query to Xbee module
-        frame.append(0x00)      # frame ID for ack- 0 = disable
-
-        frame.append(dest[0])   # 64 bit address (mac address of destination)
-        frame.append(dest[1])
-        frame.append(dest[2])
-        frame.append(dest[3])
-        frame.append(dest[4])
-        frame.append(dest[5])
-        frame.append(dest[6])
-        frame.append(dest[7])
-
-        frame.append(0x00)      # always reserved
-
-        for i in txdata:        # move data to transmit buffer
-            frame.append(i)
-        frame.append(0)         # checksum position
-
-        cks = 0;	            # compute checksum
-        for i in range(3, dl+14):
-            cks += int(frame[i])
-        i = (255-cks) & 0x00ff
-        frame[dl+14] = i        # insert checksum in message
-
-        return frame
 
 
     # Android open serial port thread
@@ -388,6 +379,8 @@ class PTApp(toga.App):
 
 
     # check for permission from the user and wait if required
+    # NOTE: This will hang here if you choose 'no' when it asks you for permission
+
     def checkPermission(self):
         ACTION_USB_PERMISSION = "com.access.device.USB_PERMISSION"
         intent = Intent(ACTION_USB_PERMISSION)
@@ -406,6 +399,11 @@ class PTApp(toga.App):
         while not self.hasPermission:
             self.hasPermission = self.usbmanager.hasPermission(self.device)
 
+    def displayProtothrottleQuery(self, widget):
+        print ("PROTOTHROTTLE")
+        pass
+
+
 
     def displayMainWidgetScreen(self, button, message):
         MARGINTOP = 2
@@ -423,9 +421,9 @@ class PTApp(toga.App):
         scan_content.add(boxrowA)
         scan_content.add(boxrowB)
 
-        ########################################################################
+        ########################################################################  Build Receiver Main Screen
 
-        adr = adprot[message[11]]   # pull value from received message
+        adr = adprot[message[11]]   # pull value from received message, PT Main Address
 
         # Render PT address on the screen
         btn    = toga.Button(id=PTID, text="Prg", on_press = self.sendPrgCommand, style=Pack(width=55, height=55, margin_top=6, background_color="#bbbbbb", color="#000000", font_size=12))
@@ -434,7 +432,7 @@ class PTApp(toga.App):
         boxrow = toga.Box(children=[desc, entry, btn], style=Pack(direction=ROW, align_items=END, margin_top=MARGINTOP))
         scan_content.add(boxrow)
 
-        ########################################################################
+        ######################################################################## PT Base Address
 
         addrbase = str(message[10]) # PT base returned from receiver
 
@@ -445,7 +443,7 @@ class PTApp(toga.App):
         boxrow = toga.Box(children=[desc, entry, btn], style=Pack(direction=ROW, align_items=END, margin_top=MARGINTOP))
         scan_content.add(boxrow)
 
-        ########################################################################
+        ######################################################################## Loco Address, the address on the PT that the receiver responds to
 
         locoaddr = message[12]
         ch = message[13] << 8
@@ -457,7 +455,7 @@ class PTApp(toga.App):
         boxrow = toga.Box(children=[desc, entry, btn], style=Pack(direction=ROW, align_items=END, margin_top=MARGINTOP))
         scan_content.add(boxrow)
 
-        #########################################################################
+        ######################################################################### Consist Address and setting
 
         cdir = message[16]
         consist = 'OFF'
@@ -512,6 +510,8 @@ class PTApp(toga.App):
         boxrow = toga.Box(style=Pack(direction=ROW, align_items=END, margin_top=MARGINTOP, height=40))
         scan_content.add(boxrow)
 
+        self.buttonSave = button
+
         scan = Button(
             'Scan',
             on_press=self.displayMainWindow,
@@ -521,19 +521,19 @@ class PTApp(toga.App):
         servos = Button(
             'Servos',
             id=button.id,
-            on_press=self.displayServoScreen,
+            on_press=self.callServoScreen,
             style=Pack(width=90, height=60, margin_top=6, background_color="#cccccc", color="#000000", font_size=12)
         )
 
         physics = Button(
             'Physics',
-            on_press=self.displayScreen,
+            on_press=self.callPhysicsScreen,
             style=Pack(width=90, height=60, margin_top=6, background_color="#cccccc", color="#000000", font_size=12)
         )
 
         notches = Button(
             'Notch',
-            on_press=self.displayScreen,
+            on_press=self.callNotchesScreen,
             style=Pack(width=90, height=60, margin_top=6, background_color="#cccccc", color="#000000", font_size=12)
         )
 
@@ -544,24 +544,29 @@ class PTApp(toga.App):
         self.main_window.content = self.scroller
         self.main_window.show()
 
-
-    def displayScreen(self, widget):
-        pass
-
     def sendPrgCommand(self, value):
-
-        match value:
-            case WDOG:
-                 pass
-
         pass
 
     def change_ptid(self, widget):
         pass
 
+    def callMainWidgetWindow(self, widget):
+        self.displayMainWidgetScreen(widget, self.message)
+
+    def callServoScreen(self, widget):
+        self.displayServoScreen(self.buttonSave, self.message)
+
+    def callPhysicsScreen(self, widget):
+        self.displayPhysicsScreen(self.buttonSave, self.message)
+
+    def callNotchesScreen(self, widget):
+        self.displayNotchesScreen(self.buttonSave, self.message)
+
+
+    #####################################################################
 
     # Servo Configure Screen
-    def displayServoScreen(self, button):
+    def displayServoScreen(self, button, message):
 
         MARGINTOP = 2
         LNUMWIDTH = 64
@@ -719,7 +724,73 @@ class PTApp(toga.App):
         main = Button(
             'Main',
             id=button.id,
-            on_press=self.callMainWindow,
+            on_press=self.callMainWidgetWindow,
+            style=Pack(width=120, height=60, margin_top=6, background_color="#cccccc", color="#000000", font_size=12)
+        )
+
+        boxrow = toga.Box(children=[scan, main], style=Pack(direction=ROW, align_items=CENTER, margin_top=MARGINTOP))
+        scan_content.add(boxrow)
+
+        self.scroller = toga.ScrollContainer(content=scan_content, style=Pack(direction=COLUMN, align_items=CENTER))
+        self.main_window.content = self.scroller
+        self.main_window.show()
+
+
+    def setLimit(self, id):
+        pass
+
+
+    def displayPhysicsScreen(self, button, message):
+        MARGINTOP = 2
+        LNUMWIDTH = 64
+        SNUMWIDTH = 42
+
+        scan_content = toga.Box(style=Pack(direction=COLUMN, margin=30))
+
+        # Ascii ID and Mac at top of display
+        idlabel  = toga.Label(self.buttonDict[button.id], style=Pack(flex=1, color="#000000", align_items=CENTER, font_size=32))
+        maclabel = toga.Label(button.id, style=Pack(flex=1, color="#000000", align_items=CENTER, font_size=12))
+        boxrowA  = toga.Box(children=[idlabel], style=Pack(direction=ROW, align_items=END, margin_top=4))
+        boxrowB  = toga.Box(children=[maclabel], style=Pack(direction=ROW, align_items=END, margin_top=2))
+
+        scan_content.add(boxrowA)
+        scan_content.add(boxrowB)
+
+        btn    = toga.Button(id=BRAT, text="Prg", on_press = self.sendPrgCommand, style=Pack(width=55, height=55, margin_top=6, background_color="#bbbbbb", color="#000000", font_size=12))
+        desc   = toga.Label("Brake Rate", style=Pack(width=262, align_items=END, font_size=18))
+        func   = toga.NumberInput(id=BRATV, on_change=self.change_ptid, min=0, max=99, style=Pack(flex=1, height=48, width=48, font_size=12, background_color="#eeeeee", color="#000000"))
+        boxrow = toga.Box(children=[desc, func, btn], style=Pack(direction=ROW, align_items=END, margin_top=1))
+        scan_content.add(boxrow)
+
+        btn    = toga.Button(id=BFNC, text="Prg", on_press = self.sendPrgCommand, style=Pack(width=55, height=55, margin_top=6, background_color="#bbbbbb", color="#000000", font_size=12))
+        desc   = toga.Label("Brake Rate FnCode", style=Pack(width=262, align_items=END, font_size=18))
+        func   = toga.NumberInput(id=BFNCV, on_change=self.change_ptid, min=0, max=99, style=Pack(flex=1, height=48, width=48, font_size=12, background_color="#eeeeee", color="#000000"))
+        boxrow = toga.Box(children=[desc, func, btn], style=Pack(direction=ROW, align_items=END, margin_top=1))
+        scan_content.add(boxrow)
+
+        btn    = toga.Button(id=ACCL, text="Prg", on_press = self.sendPrgCommand, style=Pack(width=55, height=55, margin_top=6, background_color="#bbbbbb", color="#000000", font_size=12))
+        desc   = toga.Label("Acceleration", style=Pack(width=262, align_items=END, font_size=18))
+        func   = toga.NumberInput(id=ACCLV, on_change=self.change_ptid, min=0, max=99, style=Pack(flex=1, height=48, width=48, font_size=12, background_color="#eeeeee", color="#000000"))
+        boxrow = toga.Box(children=[desc, func, btn], style=Pack(direction=ROW, align_items=END, margin_top=1))
+        scan_content.add(boxrow)
+
+        btn    = toga.Button(id=DECL, text="Prg", on_press = self.sendPrgCommand, style=Pack(width=55, height=55, margin_top=6, background_color="#bbbbbb", color="#000000", font_size=12))
+        desc   = toga.Label("Deceleration", style=Pack(width=262, align_items=END, font_size=18))
+        func   = toga.NumberInput(id=DECLV, on_change=self.change_ptid, min=0, max=99, style=Pack(flex=1, height=48, width=48, font_size=12, background_color="#eeeeee", color="#000000"))
+        boxrow = toga.Box(children=[desc, func, btn], style=Pack(direction=ROW, align_items=END, margin_top=1))
+        scan_content.add(boxrow)
+
+
+        scan = Button(
+            'Scan',
+            on_press=self.displayMainWindow,
+            style=Pack(width=120, height=60, margin_top=6, background_color="#cccccc", color="#000000", font_size=12)
+        )
+
+        main = Button(
+            'Main',
+            id=button.id,
+            on_press=self.callMainWidgetWindow,
             style=Pack(width=120, height=60, margin_top=6, background_color="#cccccc", color="#000000", font_size=12)
         )
 
@@ -732,13 +803,47 @@ class PTApp(toga.App):
         self.main_window.show()
 
 
-    def callMainWindow(self, widget):
-        self.displayMainWidgetScreen(widget, self.message)
-        
-       
+    def displayNotchesScreen(self, button, message):
+        MARGINTOP = 2
+        LNUMWIDTH = 64
+        SNUMWIDTH = 42
 
-    def setLimit(self, id):
-        pass
+        scan_content = toga.Box(style=Pack(direction=COLUMN, margin=30))
+
+        # Ascii ID and Mac at top of display
+        idlabel  = toga.Label(self.buttonDict[button.id], style=Pack(flex=1, color="#000000", align_items=CENTER, font_size=32))
+        maclabel = toga.Label(button.id, style=Pack(flex=1, color="#000000", align_items=CENTER, font_size=12))
+        boxrowA  = toga.Box(children=[idlabel], style=Pack(direction=ROW, align_items=END, margin_top=4))
+        boxrowB  = toga.Box(children=[maclabel], style=Pack(direction=ROW, align_items=END, margin_top=2))
+
+        scan_content.add(boxrowA)
+        scan_content.add(boxrowB)
+
+        scan = Button(
+            'Scan',
+            on_press=self.displayMainWindow,
+            style=Pack(width=120, height=60, margin_top=6, background_color="#cccccc", color="#000000", font_size=12)
+        )
+
+        main = Button(
+            'Main',
+            id=button.id,
+            on_press=self.callMainWidgetWindow,
+            style=Pack(width=120, height=60, margin_top=6, background_color="#cccccc", color="#000000", font_size=12)
+        )
+
+
+        boxrow = toga.Box(children=[scan, main], style=Pack(direction=ROW, align_items=CENTER, margin_top=MARGINTOP))
+        scan_content.add(boxrow)
+
+        self.scroller = toga.ScrollContainer(content=scan_content, style=Pack(direction=COLUMN, align_items=CENTER))
+        self.main_window.content = self.scroller
+        self.main_window.show()
+
+
+
+
+
 
 def main():
     return PTApp()
