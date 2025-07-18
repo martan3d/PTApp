@@ -105,10 +105,43 @@ class xbeeController:
            else:
               txBufferEscaped.append(frame[i])
 
-        return txBufferEscaped
+        return frame
 
 
-    # create a valid transmit frame for Xbee API message
+##
+## Get Packet
+## Returns a list containing the actual API message bytea
+##
+
+    def getPackets(self, data):
+
+        if data == None:
+           return []
+
+        size = len(data)
+        if size <= 0:
+           return []   
+
+        i = 0
+        while i < size:
+            msg = []
+            if data[i] == 0x7e:
+               msg.append(data[i])
+               i+=1
+
+            while i < size:
+               if data[i] == 0x7e:
+                  return msg
+
+               msg.append(data[i])
+               i+=1
+
+        return msg
+        
+        
+
+
+    # create a valid API transmit frame for Xbee API message - this is for a mac address directed message
     def buildXbeeTransmitData(self, dest, data):
         txdata = []
         dl = len(data)
@@ -147,3 +180,5 @@ class xbeeController:
         frame[dl+14] = i        # insert checksum in message
 
         return frame
+
+

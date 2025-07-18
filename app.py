@@ -119,17 +119,16 @@ adprot = { 0x30 :'A', 0x31 :'B', 0x32 :'C', 0x33 :'D', 0x34 :'E', 0x35 :'F', 0x3
 class PTApp(toga.App):
 
     def startup(self):
-
         self.Xbee = xbeeController()
-
         self.main_window = toga.MainWindow(title=self.formal_name)
         self.setupAndroidSerialPort()
         self.displayMainWindow(0)
 
-
+    ##
+    ## Main window, construct it here, make it's parts available to this class
+    ##
 
     def displayMainWindow(self, id):
-
         self.retries = 0
 
         self.discover_button = Button(
@@ -148,15 +147,18 @@ class PTApp(toga.App):
         self.main_window.content = self.scroller
         self.main_window.show()
 
+    ##
+    ## Pressed Scan button, look for all Xbees on the Network
+    ##
 
     async def start_discover(self, id):
         self.working_text.text = "Scanning for Receivers..."
 
+        # Broadcast Network Discovery, all Xbees respond with MAC and ascii ID
         self.writebuff = bytearray([0x7E, 0x00, 0x04, 0x08, 0x01, 0x4E, 0x44, 0x64])
         self.writelen = len(self.writebuff)
 
         # send everything async so we don't impact GUI timing
-
         await self.connectWrite()
         await asyncio.sleep(2)
         await self.connectRead()
@@ -191,10 +193,22 @@ class PTApp(toga.App):
         self.main_window.content = self.scroller
         self.main_window.show()
 
-    # Pressed one of the receiver scanned buttons, so ask it for it's parameters
+    ##
+    ## Pressed one of the resulting device buttons, ask it for it's parameters
+    ##
+
     async def connectToClient(self, widget):
         self.working_text.text = "Requesting Data from Receiver..."
+        self.protomessage = []
 
+        # if we have tried > 2 times and no answer, probably not a receiver, look for a protothrottle
+        if self.retries > 1:
+           self.retries = 0
+           self.working_text.text = "Searching for Protothrottle..."
+           await self.getProtothrottle()
+           return
+
+        # assume it's a receiver
         address = self.Xbee.buildAddress(widget.id)
         data = chr(RETURNTYPE) + "000000000000000000"
         buff = self.Xbee.buildXbeeTransmitData(address, data)
@@ -202,48 +216,27 @@ class PTApp(toga.App):
         self.writebuff = bytearray(buff)
         self.writelen = len(self.writebuff)
  
-        # do the await thing to give time to the GUI thread
         await self.connectWrite()
         await asyncio.sleep(1)
-
-#        print ("XBEE PROTOTHROTTLE REQUEST")
-
-#        start = 16
-#        length = 12
-#        laddr = start & 0x00ff
-#        haddr = (start & 0xff00) >> 8
-
-        # now send a PT exclusive message out, memory read and see what comes back
-#        xbeeMessage = self.Xbee.xbeeBroadCastRequest(48, 154, [ord('R'), laddr, haddr, length])
-
-#        self.writebuff = bytearray(xbeeMessage)
-#        self.writelen = len(self.writebuff)
-
-        # do the await thing to give time to the GUI thread
-#        await self.connectWrite()
-#        await asyncio.sleep(1)
-
-        # one or the other will answer
         await self.connectRead()
 
         # find the message we need, it's a specific API response from the receiver
         self.message = await self.parseReturnData(self.readlen, self.readbuff)
-
-        print ("self.message ", self.message)
+        print ("self.message Rx Query ", self.message)
 
         # save the mac address
         self.macAddress = widget.id
 
         if not self.message:   # generally don't get it on the first try, just let user try again...
-           self.working_text.text = "Failed, try again..."
-           await asyncio.sleep(0.5)
+           self.working_text.text = "Failed, try again, third retry looks for Protothrottle"
+           self.retries = self.retries + 1
+           await asyncio.sleep(0.75)
            self.working_text.text = ""
            return
 
         if self.message[3] == 129:     # got a valid one, extract the data and build the display
            self.displayMainWidgetScreen(widget, self.message)
        
-    
     # send message to Xbee
     async def connectWrite(self):
         self.connection.bulkTransfer(self.writeEndpoint, self.writebuff, self.writelen, USB_WRITE_TIMEOUT_MILLIS)
@@ -252,6 +245,10 @@ class PTApp(toga.App):
     async def connectRead(self):
         self.readbuff = bytearray(DEFAULT_READ_BUFFER_SIZE)
         self.readlen  = self.connection.bulkTransfer(self.readEndpoint, self.readbuff, DEFAULT_READ_BUFFER_SIZE, USB_READ_TIMEOUT_MILLIS)
+
+    async def connectLargeRead(self):
+        self.readlen  = self.connection.bulkTransfer(self.readEndpoint, self.readbuff, DEFAULT_READ_BUFFER_SIZE, USB_READ_TIMEOUT_MILLIS)
+
 
     # Parse data and make a list of Node Discovery return messages
     async def parseMessageData(self, size, data):
@@ -285,13 +282,129 @@ class PTApp(toga.App):
                   for i in range(19, len(msg)-2):
                      id = id + chr(msg[i])
                   self.nodeData[mac] = id
-               elif msg[7] == 2:                  # otherwise, it's broadcast data fram from PT, save 16 bit addr (always 0000?)
-                  for i in range(4, 5):
-                     adr16 = adr16 + "{:02X}".format(msg[i])
-                  self.Protothrottle[adr16] = adr16
         return self.nodeData
 
 
+
+    async def getProtothrottle(self):
+        self.protomessage = await self.queryProtothrottle()
+        print ("PROTOMESSAGE ", self.protomessage)
+        if not self.protomessage:
+           self.working_text.text = ""
+           self.displayProtothrottleScreen(self.protomessage)
+
+
+    async def queryProtothrottle(self):
+        print ("QUERY PT")
+        messages = []
+        start = 128
+        while True:
+            print ("START")
+            slotindex = start
+            lad = slotindex & 0x00ff
+            had = (slotindex & 0xff00) >> 8
+
+            xbeeFrame = self.Xbee.xbeeBroadCastRequest(48, 154, [ord('R'), lad, had, 12])
+            self.writebuff = bytearray(xbeeFrame)
+            self.writelen = len(self.writebuff)
+
+            await self.connectWrite()
+            await asyncio.sleep(2)
+            await self.connectRead()
+
+            # parse out the data the PT sends back
+            msg = self.Xbee.getPackets(self.readbuff)
+
+            if msg == None:
+               continue
+
+            messages.append(msg)
+
+            i = 0
+            slotindex = slotindex + 12
+
+            while True:                   # get the remainder of the slot data
+                print ("CONTINUE ", i)
+                lad = slotindex & 0x00ff
+                had = (slotindex & 0xff00) >> 8
+
+                xbeeFrame = self.Xbee.xbeeBroadCastRequest(48, 154, [ord('R'), lad, had, 12])
+                msg = self.Xbee.getPackets(self.readbuff)
+
+                if msg == None:                     # skip misfires
+                   continue
+
+                messages.append(msg)
+
+                i+=1
+                if i > 10:
+                   break
+
+            return messages
+
+
+
+
+
+
+
+
+    # retries on that mac address failed, send it a PT message
+    async def queryProtothrottleA(self):
+        print ("XBEE PROTOTHROTTLE REQUEST")
+
+        start = 128
+        laddr = start & 0x00ff
+        haddr = (start & 0xff00) >> 8
+
+        # now send a PT exclusive message out, memory read and see what comes back
+        xbeeMessage = self.Xbee.xbeeBroadCastRequest(48, 154, [ord('R'), laddr, haddr, 12])
+
+        self.writebuff = bytearray(xbeeMessage)
+        self.writelen = len(self.writebuff)
+
+        # do the await thing to give time to the GUI thread
+        await self.connectWrite()
+        await asyncio.sleep(2)
+        # increase buffer read size for protothrottle as he spams the network with control messages
+        await self.connectRead()
+
+        self.protomessage = await self.parseProtothrottleData(self.readlen, self.readbuff)
+
+        print ("parsed PT messages ", self.protomessage)
+
+        if not self.protomessage:
+           self.working_text.text = ""
+           self.displayProtothrottleScreen(self.protomessage)
+
+    # Parse return data looking for Protothrottle response - internal EEprom data
+    async def parseProtothrottleData(self, size, data):
+        messages = []
+        msg = []
+        if size > 0:
+           msg.append(data[0])
+        for i in range(1, size):
+            if data[i] == 0x7e:
+               messages.append(msg)
+               msg = []
+               msg.append(data[i])
+            else:
+               msg.append(data[i])
+        messages.append(msg)
+
+        print ("parse PT data messages ")
+        for m in messages:
+            print (m, len(m))
+
+        # protothrottle return memory message in the list?
+        for msg in messages:
+          if len(msg) > 13:
+             if msg[13] == 0x72 and msg[7] == 2:   # lower case 'r' and broadcast
+                return msg
+
+        return []
+
+        
     # Parse return data looking for 16 bit return and EEprom data
     async def parseReturnData(self, size, data):
         messages = []
@@ -307,12 +420,6 @@ class PTApp(toga.App):
                msg.append(data[i])
         messages.append(msg)
 
-#        for msg in messages:   # DEBUG
-#            hexString = ""
-#            for m in msg:
-#                hexString = hexString + hex(m) + " "
-#            print (hexString)
-
         if len(messages) <= 0: 
            return []
 
@@ -320,12 +427,6 @@ class PTApp(toga.App):
             if len(msg) > 20:
                if msg[3] == 129 and msg[9] == 87:   # must be 16 bit return packet and a 'W' in the message to be valid
                   return msg
-
-        # otherwise, see if there is a protothrottle return memory message in the list
-        for msg in messages:
-          if len(msg) > 13:
-             if msg[13] == 0x72 and msg[7] == 2:   # lower case 'r' and broadcast
-                return msg
 
         return []
 
@@ -399,10 +500,40 @@ class PTApp(toga.App):
         while not self.hasPermission:
             self.hasPermission = self.usbmanager.hasPermission(self.device)
 
-    def displayProtothrottleQuery(self, widget):
-        print ("PROTOTHROTTLE")
-        pass
 
+    def displayProtothrottleScreen(self, message):
+        MARGINTOP = 2
+        LNUMWIDTH = 64
+        SNUMWIDTH = 42
+
+        scan_content = toga.Box(style=Pack(direction=COLUMN, margin=30))
+
+        # Ascii ID and Mac at top of display
+        idlabel  = toga.Label(self.buttonDict[self.macAddress], style=Pack(flex=1, color="#000000", align_items=CENTER, font_size=32))
+        maclabel = toga.Label(self.macAddress, style=Pack(flex=1, color="#000000", align_items=CENTER, font_size=12))
+        boxrowA  = toga.Box(children=[idlabel], style=Pack(direction=ROW, align_items=END, margin_top=4))
+        boxrowB  = toga.Box(children=[maclabel], style=Pack(direction=ROW, align_items=END, margin_top=2))
+
+        scan_content.add(boxrowA)
+        scan_content.add(boxrowB)
+
+        datalabel = toga.Label(str(message), style=Pack(flex=1, color="#000000", align_items=CENTER, font_size=12))
+        boxrow    = toga.Box(children=[datalabel], style=Pack(direction=ROW, align_items=END, margin_top=4))
+        scan_content.add(boxrow)
+
+
+        scan = Button(
+            'Scan',
+            on_press=self.displayMainWindow,
+            style=Pack(width=120, height=60, margin_top=6, background_color="#cccccc", color="#000000", font_size=12)
+        )
+
+        boxrow = toga.Box(children=[scan], style=Pack(direction=ROW, align_items=CENTER, margin_top=MARGINTOP))
+        scan_content.add(boxrow)
+
+        self.scroller = toga.ScrollContainer(content=scan_content, style=Pack(direction=COLUMN, align_items=CENTER))
+        self.main_window.content = self.scroller
+        self.main_window.show()
 
 
     def displayMainWidgetScreen(self, button, message):
