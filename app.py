@@ -288,14 +288,17 @@ class PTApp(toga.App):
 
     async def getProtothrottle(self):
         self.protomessage = await self.queryProtothrottle()
-        print ("PROTOMESSAGE ", self.protomessage)
-        if not self.protomessage:
-           self.working_text.text = ""
-           self.displayProtothrottleScreen(self.protomessage)
+        for m in self.protomessage:
+            print (m)
 
+        if len(self.protomessage) != 0:
+           self.working_text.text = ""
+           print ("display screen")
+           self.displayProtothrottleScreen(self.protomessage)
+        print ("exit getPT")
 
     async def queryProtothrottle(self):
-        print ("QUERY PT")
+        self.working_text.text = "Retrieve Slot 0 Data from Protothrottle"
         messages = []
         start = 128
         while True:
@@ -313,7 +316,8 @@ class PTApp(toga.App):
             await self.connectRead()
 
             # parse out the data the PT sends back
-            msg = self.Xbee.getPackets(self.readbuff)
+            msg = self.Xbee.getPacket(self.readbuff)
+            self.working_text.text = "Get Packet 0"
 
             if msg == None:
                continue
@@ -324,17 +328,26 @@ class PTApp(toga.App):
             slotindex = slotindex + 12
 
             while True:                   # get the remainder of the slot data
-                print ("CONTINUE ", i)
+                self.working_text.text = "Get Packet " + str(i)
                 lad = slotindex & 0x00ff
                 had = (slotindex & 0xff00) >> 8
 
                 xbeeFrame = self.Xbee.xbeeBroadCastRequest(48, 154, [ord('R'), lad, had, 12])
-                msg = self.Xbee.getPackets(self.readbuff)
+                self.writebuff = bytearray(xbeeFrame)
+                self.writelen = len(self.writebuff)
+
+                await self.connectWrite()
+                await asyncio.sleep(0.5)
+                await self.connectRead()
+
+                msg = self.Xbee.getPacket(self.readbuff)
 
                 if msg == None:                     # skip misfires
                    continue
 
                 messages.append(msg)
+
+                slotindex = slotindex + 12
 
                 i+=1
                 if i > 10:

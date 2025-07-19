@@ -113,28 +113,33 @@ class xbeeController:
 ## Returns a list containing the actual API message bytea
 ##
 
-    def getPackets(self, data):
+    def getPacket(self, data):
 
         if data == None:
            return []
 
         size = len(data)
         if size <= 0:
-           return []   
+           return [] 
 
         i = 0
+        msg = []
+        startFound = False
+
         while i < size:
-            msg = []
             if data[i] == 0x7e:
+               size  = data[i+2] + 3
+               startFound = True
+               msg.append(data[i+0])
+               msg.append(data[i+1])
+               msg.append(data[i+2])
+               i+=3
+
+            elif startFound:
                msg.append(data[i])
                i+=1
-
-            while i < size:
-               if data[i] == 0x7e:
-                  return msg
-
-               msg.append(data[i])
-               i+=1
+            else:
+               break
 
         return msg
         
