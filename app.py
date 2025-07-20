@@ -299,9 +299,6 @@ class PTApp(toga.App):
     async def getProtothrottle(self):
         self.protomessage = await self.queryProtothrottle()
 
-        for m in self.protomessage:
-            print (m)
-
         if len(self.protomessage) != 0:
            self.working_text.text = ""
            self.displayProtothrottleScreen(self.protomessage)
@@ -313,7 +310,9 @@ class PTApp(toga.App):
     async def queryProtothrottle(self):
         self.working_text.text = "Retrieve Slot Data from Protothrottle"
         await asyncio.sleep(.25)
+        await self.connectRead()
         messages = []
+        msgsave = []
         slotindex = 128
 
         while True:
@@ -326,12 +325,15 @@ class PTApp(toga.App):
             self.writelen = len(self.writebuff)
 
             await self.connectWrite()
-            await asyncio.sleep(.2)
+            await asyncio.sleep(.1)
             await self.connectRead()
 
             # parse out the data the PT sends back
             msg = self.Xbee.getPacket(self.readbuff)
             self.working_text.text = "Get offset " + str(slotindex)
+
+            if msgsave == msg:
+               continue
 
             if msg == None:
                continue
@@ -339,9 +341,8 @@ class PTApp(toga.App):
             if len(msg) < 28:
                continue
 
-            print ("slotindex ", slotindex)
-            print ("returned length", len(msg))
-
+            msgsave = msg
+            print (msg, slotindex, len(msg))
             messages.append(msg)
 
             slotindex = slotindex + 128
@@ -475,8 +476,6 @@ class PTApp(toga.App):
 
         blank  = toga.Label("   ")
 
-        message.pop(0)  ##?
-
         for m in message:
             if m != []:
                la = m[16]
@@ -484,7 +483,7 @@ class PTApp(toga.App):
                adr = lh | la                       # first two bytes are the locomotive address, go ahead and print that 
                p0 = f"{adr:4d}"
 
-               ptlabel = toga.Label(p0, style=Pack(flex=1, color="#000000", align_items=CENTER, font_size=28))
+               ptlabel = toga.Label(p0, style=Pack(width=100, color="#000000", align_items=END, font_size=28))
                load = Button("Load", on_press=self.loadSlot, style=Pack(width=80, height=50, margin_top=5, background_color="#cccccc", color="#000000", font_size=10))
                save = Button("Save", on_press=self.loadSlot, style=Pack(width=80, height=50, margin_top=5, background_color="#cccccc", color="#000000", font_size=10))
                edit = Button("Edit", on_press=self.loadSlot, style=Pack(width=80, height=50, margin_top=5, background_color="#cccccc", color="#000000", font_size=10))
