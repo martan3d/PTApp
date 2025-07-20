@@ -298,6 +298,10 @@ class PTApp(toga.App):
 
     async def getProtothrottle(self):
         self.protomessage = await self.queryProtothrottle()
+
+        for m in self.protomessage:
+            print (m)
+
         if len(self.protomessage) != 0:
            self.working_text.text = ""
            self.displayProtothrottleScreen(self.protomessage)
@@ -335,9 +339,13 @@ class PTApp(toga.App):
             if len(msg) < 28:
                continue
 
+            print ("slotindex ", slotindex)
+            print ("returned length", len(msg))
+
             messages.append(msg)
 
             slotindex = slotindex + 128
+
             if slotindex > 2048:
                return messages      # just collect the first few bytes
 
@@ -465,6 +473,10 @@ class PTApp(toga.App):
         scan_content.add(boxrowA)
         scan_content.add(boxrowB)
 
+        blank  = toga.Label("   ")
+
+        message.pop(0)  ##?
+
         for m in message:
             if m != []:
                la = m[16]
@@ -472,8 +484,14 @@ class PTApp(toga.App):
                adr = lh | la                       # first two bytes are the locomotive address, go ahead and print that 
                p0 = f"{adr:4d}"
 
-               slot   = Button(p0, on_press=self.displaySlotWindow, style=Pack(width=120, height=60, margin_top=6, background_color="#cccccc", color="#000000", font_size=16))
-               boxrow = toga.Box(children=[slot], style=Pack(direction=ROW, align_items=END, margin_top=4))
+               ptlabel = toga.Label(p0, style=Pack(flex=1, color="#000000", align_items=CENTER, font_size=28))
+               load = Button("Load", on_press=self.loadSlot, style=Pack(width=80, height=50, margin_top=5, background_color="#cccccc", color="#000000", font_size=10))
+               save = Button("Save", on_press=self.loadSlot, style=Pack(width=80, height=50, margin_top=5, background_color="#cccccc", color="#000000", font_size=10))
+               edit = Button("Edit", on_press=self.loadSlot, style=Pack(width=80, height=50, margin_top=5, background_color="#cccccc", color="#000000", font_size=10))
+               boxrow = toga.Box(children=[ptlabel, load, save, edit], style=Pack(direction=ROW, align_items=END, margin_top=4))
+               scan_content.add(boxrow)
+
+               boxrow = toga.Box(children=[blank, toga.Divider(), blank], style=Pack(direction=ROW, align_items=END))
                scan_content.add(boxrow)
 
         scan = Button(
@@ -482,7 +500,19 @@ class PTApp(toga.App):
             style=Pack(width=120, height=60, margin_top=6, background_color="#cccccc", color="#000000", font_size=12)
         )
 
-        boxrow = toga.Box(children=[scan], style=Pack(direction=ROW, align_items=CENTER, margin_top=MARGINTOP))
+        loadAll = Button(
+            'Load All',
+            on_press=self.displayMainWindow,
+            style=Pack(width=120, height=60, margin_top=6, background_color="#cccccc", color="#000000", font_size=12)
+        )
+
+        saveAll = Button(
+            'Save All',
+            on_press=self.displayMainWindow,
+            style=Pack(width=120, height=60, margin_top=6, background_color="#cccccc", color="#000000", font_size=12)
+        )
+
+        boxrow = toga.Box(children=[scan, loadAll, saveAll], style=Pack(direction=ROW, align_items=CENTER, margin_top=MARGINTOP))
         scan_content.add(boxrow)
 
         self.scroller = toga.ScrollContainer(content=scan_content, style=Pack(direction=COLUMN, align_items=CENTER))
@@ -490,6 +520,9 @@ class PTApp(toga.App):
         self.main_window.show()
 
     def displaySlotWindow(self):
+        pass
+
+    def loadSlot(self):
         pass
 
 
