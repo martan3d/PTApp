@@ -105,7 +105,7 @@ class xbeeController:
            else:
               txBufferEscaped.append(frame[i])
 
-        return txBufferEscaped    #frame
+        return frame
 
 
 ##

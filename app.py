@@ -497,9 +497,9 @@ class PTApp(toga.App):
                msave = adr
                p0 = f"{adr:4d}"
 
-               idS = "S:"+str(slot)
-               idL = "L:"+str(slot)
-               idE = "E:"+str(slot)
+               idS = "S:"+str(slot)+":"+p0
+               idL = "L:"+str(slot)+":"+p0
+               idE = "E:"+str(slot)+":"+p0
 
                slot = slot + 1
 
@@ -549,7 +549,8 @@ class PTApp(toga.App):
         scan_content = toga.Box(style=Pack(direction=COLUMN, margin=30))
 
         s = id.id.split(":")
-        slot = "Slot: "+ s[1]
+        slot = "Slot: "+ s[1] + " - " + s[2]
+        sid = int(s[1])
 
         idlabel  = toga.Label(slot, style=Pack(flex=1, color="#000000", align_items=CENTER, font_size=32))
         boxrow = toga.Box(children=[idlabel], style=Pack(direction=ROW, align_items=CENTER, margin_top=4))
@@ -564,7 +565,7 @@ class PTApp(toga.App):
         boxrow = toga.Box(children=[self.filename], style=Pack(direction=ROW, align_items=CENTER, margin_top=4))
         scan_content.add(boxrow)     
 
-        saveButton = toga.Button("Save File", on_press=self.save_to_app_storage)
+        saveButton = toga.Button("Save File", id=sid, on_press=self.save_to_app_storage)
         boxrow = toga.Box(children=[blank, blank, saveButton], style=Pack(direction=ROW, align_items=START, margin_top=4))
         scan_content.add(boxrow)    
 
@@ -587,9 +588,74 @@ class PTApp(toga.App):
         self.displayProtothrottleScreen(self.protomessages)
 
 
+##
+## Query the PT for the full data record, then save in local storage
+##
 
-    def save_to_app_storage(self, widget):
-        file_content = "12345"
+    async def save_to_app_storage(self, widget):
+        slot = int(widget.id)
+        slotindex = slot*128
+        msgsave = []
+        notdone = True
+
+        while (notdone):
+        
+            lad = slotindex & 0x00ff
+            had = (slotindex & 0xff00) >> 8
+
+            xbeeFrame = self.Xbee.xbeeBroadCastRequest(48, 154, [ord('R'), lad, had, 12])
+            self.writebuff = bytearray(xbeeFrame)
+            self.writelen = len(self.writebuff)
+
+            await self.connectWrite()
+            await asyncio.sleep(.1)
+            await self.connectRead()
+
+        # parse out the data the PT sends back
+            msg = self.Xbee.getPacket(self.readbuff)
+            self.working_text.text = "Writing data - offset " + str(slotindex)
+
+            if msg == None:
+               continue
+
+            if len(msg) < 28:
+               continue
+
+            datarecord = []                                  # stick the data bytes into a list
+            for j in range(16, len(msg)-1):         # trim off the header info and the checksum from the xbee return message
+               datarecord.append(msg[j])
+
+            i = 0
+            slotindex = slotindex + 12
+
+            while (notdone):                   # get the remainder of the slot data
+                lad = slotindex & 0x00ff
+                had = (slotindex & 0xff00) >> 8
+
+                msg = self.Xbee.getPacket(self.readbuff)
+                self.working_text.text = "Writing data - offset " + str(slotindex)
+
+                if msg == None:                     # skip misfires
+                   continue
+
+                if len(msg) < 29:                   # short ones sometimes, not sure why, toss it and retry
+                   continue
+
+                if msgsave == msg:
+                   continue
+
+                msgsave = msg
+
+                for j in range(16, len(msg)-1):     # trim off stuff we don't need
+                   datarecord.append(msg[j])
+
+                slotindex = slotindex + 12
+
+                i = i + 1
+
+                if i > 10:
+                   notdone = False
+                   break
         
         # Get the app-specific data directory
         app_data_path = self.paths.app
@@ -600,7 +666,7 @@ class PTApp(toga.App):
 
         try:
             with open(file_path, "w") as f:
-                f.write(file_content)
+                f.write(datarecord)
             self.main_window.info_dialog("Success", f"File saved to: {file_path}")
         except Exception as e:
             self.main_window.error_dialog("Error", f"Could not save file: {e}")
