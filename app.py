@@ -297,14 +297,11 @@ class PTApp(toga.App):
 ##
 
     async def getProtothrottle(self):
-        self.protomessage = await self.queryProtothrottle()
+        self.protomessages = await self.queryProtothrottle()
 
-        for m in self.protomessage:
-            print (m)
-
-        if len(self.protomessage) != 0:
+        if len(self.protomessages) != 0:
            self.working_text.text = ""
-           self.displayProtothrottleScreen(self.protomessage)
+           self.displayProtothrottleScreen(self.protomessages)
 
 ##
 ## Send MRBUS requests and accumulate responses
@@ -313,8 +310,14 @@ class PTApp(toga.App):
     async def queryProtothrottle(self):
         self.working_text.text = "Retrieve Slot Data from Protothrottle"
         await asyncio.sleep(.25)
+        await self.connectRead()
         messages = []
+        msgsave = []
         slotindex = 128
+
+        MAXSLOTS = 17    # maximum number of slots we can retrieve?  Should be 20 but gets 'stuck' if we ask for more.
+
+        i = 0
 
         while True:
 
@@ -326,7 +329,7 @@ class PTApp(toga.App):
             self.writelen = len(self.writebuff)
 
             await self.connectWrite()
-            await asyncio.sleep(.2)
+            await asyncio.sleep(.1)
             await self.connectRead()
 
             # parse out the data the PT sends back
@@ -339,15 +342,18 @@ class PTApp(toga.App):
             if len(msg) < 28:
                continue
 
-            print ("slotindex ", slotindex)
-            print ("returned length", len(msg))
+            if msgsave == msg:
+               continue
 
+            i += 1
+            print (i, msg, slotindex, len(msg))
+
+            msgsave = msg
             messages.append(msg)
-
             slotindex = slotindex + 128
 
-            if slotindex > 2048:
-               return messages      # just collect the first few bytes
+            if slotindex > (128*MAXSLOTS):
+               return messages      
 
 
 ##
@@ -431,6 +437,7 @@ class PTApp(toga.App):
 ##
 ## check for permission from the user and wait if required
 ## NOTE: This will hang here if you choose 'no' when it asks you for permission
+## The only way out is to end the program
 ##
 
     def checkPermission(self):
@@ -475,19 +482,31 @@ class PTApp(toga.App):
 
         blank  = toga.Label("   ")
 
-        message.pop(0)  ##?
+        msave = 0
+        slot = 0
 
         for m in message:
             if m != []:
                la = m[16]
                lh = m[17] << 8
                adr = lh | la                       # first two bytes are the locomotive address, go ahead and print that 
+
+               if adr == msave:                    # toss any duplicates
+                  continue
+
+               msave = adr
                p0 = f"{adr:4d}"
 
-               ptlabel = toga.Label(p0, style=Pack(flex=1, color="#000000", align_items=CENTER, font_size=28))
-               load = Button("Load", on_press=self.loadSlot, style=Pack(width=80, height=50, margin_top=5, background_color="#cccccc", color="#000000", font_size=10))
-               save = Button("Save", on_press=self.loadSlot, style=Pack(width=80, height=50, margin_top=5, background_color="#cccccc", color="#000000", font_size=10))
-               edit = Button("Edit", on_press=self.loadSlot, style=Pack(width=80, height=50, margin_top=5, background_color="#cccccc", color="#000000", font_size=10))
+               idS = "S:"+str(slot)+":"+p0
+               idL = "L:"+str(slot)+":"+p0
+               idE = "E:"+str(slot)+":"+p0
+
+               slot = slot + 1
+
+               ptlabel = toga.Label(p0, style=Pack(width=100, color="#000000", align_items=END, font_size=28))
+               load = Button("Load", id=idL, on_press=self.loadSlot, style=Pack(width=80, height=50, margin_top=5, background_color="#cccccc", color="#000000", font_size=10))
+               save = Button("Save", id=idS, on_press=self.saveSlot, style=Pack(width=80, height=50, margin_top=5, background_color="#cccccc", color="#000000", font_size=10))
+               edit = Button("Edit", id=idE, on_press=self.editSlot, style=Pack(width=80, height=50, margin_top=5, background_color="#cccccc", color="#000000", font_size=10))
                boxrow = toga.Box(children=[ptlabel, load, save, edit], style=Pack(direction=ROW, align_items=END, margin_top=4))
                scan_content.add(boxrow)
 
@@ -522,8 +541,145 @@ class PTApp(toga.App):
     def displaySlotWindow(self):
         pass
 
-    def loadSlot(self):
-        pass
+    def loadSlot(self, id):
+        scan_content = toga.Box(style=Pack(direction=COLUMN, margin=30))
+
+
+    def saveSlot(self, id):
+        scan_content = toga.Box(style=Pack(direction=COLUMN, margin=30))
+
+        s = id.id.split(":")
+        slot = "Slot: "+ s[1] + " - " + s[2]
+        sid = int(s[1])
+
+        idlabel  = toga.Label(slot, style=Pack(flex=1, color="#000000", align_items=CENTER, font_size=32))
+        boxrow = toga.Box(children=[idlabel], style=Pack(direction=ROW, align_items=CENTER, margin_top=4))
+        scan_content.add(boxrow)
+
+        blank  = toga.Label("   ", style=Pack(width=200))
+        boxrow = toga.Box(children=[blank], style=Pack(direction=ROW, align_items=CENTER, margin_top=4))
+        scan_content.add(boxrow)
+
+        self.filename = toga.TextInput(placeholder="Save as (filename)", style=Pack(flex=1))
+
+        boxrow = toga.Box(children=[self.filename], style=Pack(direction=ROW, align_items=CENTER, margin_top=4))
+        scan_content.add(boxrow)     
+
+        saveButton = toga.Button("Save File", id=sid, on_press=self.save_to_app_storage)
+        boxrow = toga.Box(children=[blank, blank, saveButton], style=Pack(direction=ROW, align_items=START, margin_top=4))
+        scan_content.add(boxrow)    
+
+        back = Button(
+            'Back',
+            on_press=self.backtoProtothrottle,
+            style=Pack(width=120, height=60, margin_top=6, background_color="#cccccc", color="#000000", font_size=12)
+        )
+        boxrow = toga.Box(children=[back], style=Pack(direction=ROW, align_items=CENTER, margin_top=4))
+        scan_content.add(boxrow)    
+ 
+        self.scroller = toga.ScrollContainer(content=scan_content, style=Pack(direction=COLUMN, align_items=CENTER))
+        self.main_window.content = self.scroller
+        self.main_window.show()
+
+        print ("save slot", id.id)
+
+
+    def backtoProtothrottle(self, id):
+        self.displayProtothrottleScreen(self.protomessages)
+
+
+##
+## Query the PT for the full data record, then save in local storage
+##
+
+    async def save_to_app_storage(self, widget):
+        slot = int(widget.id)
+        slotindex = slot*128
+        msgsave = []
+        notdone = True
+
+        while (notdone):
+        
+            lad = slotindex & 0x00ff
+            had = (slotindex & 0xff00) >> 8
+
+            xbeeFrame = self.Xbee.xbeeBroadCastRequest(48, 154, [ord('R'), lad, had, 12])
+            self.writebuff = bytearray(xbeeFrame)
+            self.writelen = len(self.writebuff)
+
+            await self.connectWrite()
+            await asyncio.sleep(.1)
+            await self.connectRead()
+
+        # parse out the data the PT sends back
+            msg = self.Xbee.getPacket(self.readbuff)
+            self.working_text.text = "Writing data - offset " + str(slotindex)
+
+            if msg == None:
+               continue
+
+            if len(msg) < 28:
+               continue
+
+            datarecord = []                                  # stick the data bytes into a list
+            for j in range(16, len(msg)-1):         # trim off the header info and the checksum from the xbee return message
+               datarecord.append(msg[j])
+
+            i = 0
+            slotindex = slotindex + 12
+
+            while (notdone):                   # get the remainder of the slot data
+                lad = slotindex & 0x00ff
+                had = (slotindex & 0xff00) >> 8
+
+                msg = self.Xbee.getPacket(self.readbuff)
+                self.working_text.text = "Writing data - offset " + str(slotindex)
+
+                if msg == None:                     # skip misfires
+                   continue
+
+                if len(msg) < 29:                   # short ones sometimes, not sure why, toss it and retry
+                   continue
+
+                if msgsave == msg:
+                   continue
+
+                msgsave = msg
+
+                for j in range(16, len(msg)-1):     # trim off stuff we don't need
+                   datarecord.append(msg[j])
+
+                slotindex = slotindex + 12
+
+                i = i + 1
+
+                if i > 10:
+                   notdone = False
+                   break
+        
+        # Get the app-specific data directory
+        app_data_path = self.paths.app
+        
+        # Define the filename and create the full path
+        filename = self.filename.value
+        file_path = app_data_path / filename
+
+        try:
+            with open(file_path, "w") as f:
+                f.write(datarecord)
+            self.main_window.info_dialog("Success", f"File saved to: {file_path}")
+        except Exception as e:
+            self.main_window.error_dialog("Error", f"Could not save file: {e}")
+
+
+    def editSlot(self, id):
+        scan_content = toga.Box(style=Pack(direction=COLUMN, margin=30))
+
+
+
+
+
+
 
 
     def displayMainWidgetScreen(self, button, message):
