@@ -550,7 +550,7 @@ class PTApp(toga.App):
 
         s = id.id.split(":")
         slot = "Slot: "+ s[1] + " - " + s[2]
-        sid = int(s[1])
+        self.sid = int(s[1])
 
         idlabel  = toga.Label(slot, style=Pack(flex=1, color="#000000", align_items=CENTER, font_size=32))
         boxrow = toga.Box(children=[idlabel], style=Pack(direction=ROW, align_items=CENTER, margin_top=4))
@@ -565,7 +565,7 @@ class PTApp(toga.App):
         boxrow = toga.Box(children=[self.filename], style=Pack(direction=ROW, align_items=CENTER, margin_top=4))
         scan_content.add(boxrow)     
 
-        saveButton = toga.Button("Save File", id=sid, on_press=self.save_to_app_storage)
+        saveButton = toga.Button("Save File", on_press=self.save_to_app_storage)
         boxrow = toga.Box(children=[blank, blank, saveButton], style=Pack(direction=ROW, align_items=START, margin_top=4))
         scan_content.add(boxrow)    
 
@@ -593,12 +593,10 @@ class PTApp(toga.App):
 ##
 
     async def save_to_app_storage(self, widget):
-        slot = int(widget.id)
-        slotindex = slot*128
+        slotindex = self.sid*128
         msgsave = []
-        notdone = True
 
-        while (notdone):
+        while True:
         
             lad = slotindex & 0x00ff
             had = (slotindex & 0xff00) >> 8
@@ -613,10 +611,12 @@ class PTApp(toga.App):
 
         # parse out the data the PT sends back
             msg = self.Xbee.getPacket(self.readbuff)
-            self.working_text.text = "Writing data - offset " + str(slotindex)
+            #self.working_text.text = "Reading from PT - offset " + str(slotindex)
 
             if msg == None:
                continue
+
+            print (slotindex, msg, len(msg))
 
             if len(msg) < 28:
                continue
@@ -627,46 +627,64 @@ class PTApp(toga.App):
 
             i = 0
             slotindex = slotindex + 12
+            break
 
-            while (notdone):                   # get the remainder of the slot data
-                lad = slotindex & 0x00ff
-                had = (slotindex & 0xff00) >> 8
 
-                msg = self.Xbee.getPacket(self.readbuff)
-                self.working_text.text = "Writing data - offset " + str(slotindex)
+        while True:                   # get the remainder of the slot data
+            lad = slotindex & 0x00ff
+            had = (slotindex & 0xff00) >> 8
 
-                if msg == None:                     # skip misfires
-                   continue
+            xbeeFrame = self.Xbee.xbeeBroadCastRequest(48, 154, [ord('R'), lad, had, 12])
+            self.writebuff = bytearray(xbeeFrame)
+            self.writelen = len(self.writebuff)
 
-                if len(msg) < 29:                   # short ones sometimes, not sure why, toss it and retry
-                   continue
+            await self.connectWrite()
+            await asyncio.sleep(.1)
+            await self.connectRead()
 
-                if msgsave == msg:
-                   continue
+            msg = self.Xbee.getPacket(self.readbuff)
 
-                msgsave = msg
+            if msg == None:                     # skip misfires
+               continue
 
-                for j in range(16, len(msg)-1):     # trim off stuff we don't need
-                   datarecord.append(msg[j])
+            print (slotindex, msg, len(msg))
 
-                slotindex = slotindex + 12
+            if len(msg) < 28:                   # short ones sometimes, not sure why, toss it and retry
+               continue
 
-                i = i + 1
+            if msgsave == msg:
+               continue
 
-                if i > 10:
-                   notdone = False
-                   break
+            msgsave = msg
+
+            for j in range(16, len(msg)-1):     # trim off stuff we don't need
+               datarecord.append(msg[j])
+
+            #self.working_text.text = "Reading from PT - offset " + str(slotindex)
+            slotindex = slotindex + 12
+
+            i = i + 1
+
+            if i > 10:
+               notdone = False
+               break
         
         # Get the app-specific data directory
         app_data_path = self.paths.app
+
+        print (dir(self.paths))
         
         # Define the filename and create the full path
         filename = self.filename.value
         file_path = app_data_path / filename
 
+        record = ""
+        for d in datarecord:
+            record = record + str(d) + ":"
+
         try:
             with open(file_path, "w") as f:
-                f.write(datarecord)
+                f.write(record)
             self.main_window.info_dialog("Success", f"File saved to: {file_path}")
         except Exception as e:
             self.main_window.error_dialog("Error", f"Could not save file: {e}")
