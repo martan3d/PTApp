@@ -16,6 +16,10 @@ if toga.platform.current_platform == 'android':
    # Android Java Class names, used for permissions
    Intent = jclass('android.content.Intent')
    PendingIntent = jclass('android.app.PendingIntent')
+   from android.content import ContentResolver
+   from android.provider import MediaStore
+   from android.app import Activity
+
 
 # Silicon Labs USB constants
 
@@ -460,7 +464,7 @@ class PTApp(toga.App):
 
 ##
 ##
-## Screen display methods
+## Display Protothrottle Screen
 ##
 ##
 
@@ -538,14 +542,55 @@ class PTApp(toga.App):
         self.main_window.content = self.scroller
         self.main_window.show()
 
+##
+## load slot data from app memory, then send to PT slot
+
+
+    async def loadSlot(self, widget):
+
+        print (widget)
+
+        fileChose = Intent(Intent.ACTION_GET_CONTENT)
+        fileChose.addCategory(Intent.CATEGORY_OPENABLE)
+        fileChose.setType("*/*")
+
+        # Assuming `app` is your toga.App object
+        results = await self._impl.intent_result(Intent.createChooser(fileChose, "Choose a file"))
+        data = results['resultData'].getData()
+        context = self._impl.native
+        bytesJarray = bytes((context.getContentResolver().openInputStream(data).readAllBytes()))
+
+        print ("total length of file ", len(bytesJarray))
+
+
+
+    async def saveSlot(self, widget):
+        print ("SaveSlot") 
+        # Create an Intent for creating a document
+        intent = Intent(Intent.ACTION_CREATE_DOCUMENT)
+        intent.addCategory(Intent.CATEGORY_OPENABLE)
+#         intent.setType("text/plain")  # Or desired MIME type
+        intent.setType("*/*")  # desired MIME type
+        intent.putExtra(Intent.EXTRA_TITLE, "NewDocument.txt")
+
+        results = await self.app._impl.intent_result(intent)
+#        if results['resultCode'] == jclass('android.app.Activity').RESULT_OK:
+        if results['resultCode'] == Activity.RESULT_OK:
+           uri = results['resultData'].getData()
+           context = self._impl.native
+           content_resolver = context.getContentResolver()
+           output_stream = content_resolver.openOutputStream(uri)
+           output_stream.write(b"My file content")
+           output_stream.close()
+
+
+
+
     def displaySlotWindow(self):
         pass
 
-    def loadSlot(self, id):
-        scan_content = toga.Box(style=Pack(direction=COLUMN, margin=30))
 
-
-    def saveSlot(self, id):
+    def saveSlotA(self, id):
         scan_content = toga.Box(style=Pack(direction=COLUMN, margin=30))
 
         s = id.id.split(":")
@@ -592,7 +637,7 @@ class PTApp(toga.App):
 ## Query the PT for the full data record, then save in local storage
 ##
 
-    async def save_to_app_storage(self, widget):
+    async def getSlotData(self, widget):
         slotindex = self.sid*128
         msgsave = []
 
@@ -668,34 +713,58 @@ class PTApp(toga.App):
             if i > 10:
                notdone = False
                break
-        
-        # Get the app-specific data directory
-        app_data_path = self.paths.app
 
-        print (dir(self.paths))
-        
-        # Define the filename and create the full path
-        filename = self.filename.value
-        file_path = app_data_path / filename
-
-        record = ""
+        self.record = ""
         for d in datarecord:
-            record = record + str(d) + ":"
+            self.record = self.record + str(d) + ":"
 
-        try:
-            with open(file_path, "w") as f:
-                f.write(record)
-            self.main_window.info_dialog("Success", f"File saved to: {file_path}")
-        except Exception as e:
-            self.main_window.error_dialog("Error", f"Could not save file: {e}")
+        return datarecord
+
+
+
+
+#    async def openFileDialog(self):
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+    async def oldSlot(self, widget):
+
+        fileChose = Intent(Intent.ACTION_GET_CONTENT)
+        fileChose.addCategory(Intent.CATEGORY_OPENABLE)
+        fileChose.setType("*/*")
+
+        # Assuming `app` is your toga.App object
+        results = await self._impl.intent_result(Intent.createChooser(fileChose, "Choose a file"))
+
+        print (dir(results))
+
+        Uri = jclass('android.net.Uri')
+        fileUri = Uri.fromFile(results)
+        context = self._impl.native
+        bytesJarray = bytes((context.getContentResolver().openInputStream(fileUri).readAllBytes()))
+
+        # Ask if sure?
+
+        print (len(bytesJarray))
+
+        # send slot data to Protothrottle
+
 
 
     def editSlot(self, id):
         scan_content = toga.Box(style=Pack(direction=COLUMN, margin=30))
-
-
-
-
 
 
 
