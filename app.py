@@ -333,7 +333,7 @@ class PTApp(toga.App):
             self.writelen = len(self.writebuff)
 
             await self.connectWrite()
-            await asyncio.sleep(.1)
+#            await asyncio.sleep(.1)
             await self.connectRead()
 
             # parse out the data the PT sends back
@@ -484,6 +484,9 @@ class PTApp(toga.App):
         scan_content.add(boxrowA)
         scan_content.add(boxrowB)
 
+        self.working_text = Label("", style=Pack(font_size=12, color="#000000"))
+        scan_content.add(self.working_text)
+
         blank  = toga.Label("   ")
 
         msave = 0
@@ -543,59 +546,123 @@ class PTApp(toga.App):
         self.main_window.show()
 
 ##
-## load slot data from app memory, then send to PT slot
+## load slot data from app memory (disk), then send to PT slot
+##
 
+    async def loadSlot(self, id):
 
-    async def loadSlot(self, widget):
-
-        print (widget)
+        s = id.id.split(":")
+        slot = "Slot: "+ s[1] + " - " + s[2]
+        self.sid = int(s[1])
 
         fileChose = Intent(Intent.ACTION_GET_CONTENT)
         fileChose.addCategory(Intent.CATEGORY_OPENABLE)
         fileChose.setType("*/*")
 
-        # Assuming `app` is your toga.App object
         results = await self._impl.intent_result(Intent.createChooser(fileChose, "Choose a file"))
-        data = results['resultData'].getData()
-        context = self._impl.native
-        bytesJarray = bytes((context.getContentResolver().openInputStream(data).readAllBytes()))
 
-        print ("total length of file ", len(bytesJarray))
+        try:
+           data = results['resultData'].getData()
+           context = self._impl.native
+           bytesJarray = bytes((context.getContentResolver().openInputStream(data).readAllBytes()))
+           self.working_text = "Loaded all data length of file " + str(len(bytesJarray))
+           await asyncio.sleep(.2)
+           print (bytesJarray.hex())
+           self.working_text = "Sending data to Protothrottle Slot " + slot
+
+           self.sendSlotData(bytesJarray)
+
+        except:
+           self.working_text = "Load Canceled"
+           await asyncio.sleep(.2)
+
+        self.working_text = ""
+
+        # Send data to PT
 
 
 
-    async def saveSlot(self, widget):
-        print ("SaveSlot") 
+##
+## Save slot data to internal Documents Folder
+##
+
+    async def saveSlot(self, id):
+        s = id.id.split(":")
+        slot = "Slot: "+ s[1] + " - " + s[2]
+        self.sid = int(s[1])
+        filename = s[2] + ".pts"   # Protothrottle single slot config
+
+        slotdata = await self.getSlotData(self.sid+1)
+        datarecord = bytearray(slotdata)
+
         # Create an Intent for creating a document
         intent = Intent(Intent.ACTION_CREATE_DOCUMENT)
         intent.addCategory(Intent.CATEGORY_OPENABLE)
 #         intent.setType("text/plain")  # Or desired MIME type
         intent.setType("*/*")  # desired MIME type
-        intent.putExtra(Intent.EXTRA_TITLE, "NewDocument.txt")
+        intent.putExtra(Intent.EXTRA_TITLE, filename)
 
         results = await self.app._impl.intent_result(intent)
-#        if results['resultCode'] == jclass('android.app.Activity').RESULT_OK:
-        if results['resultCode'] == Activity.RESULT_OK:
-           uri = results['resultData'].getData()
-           context = self._impl.native
-           content_resolver = context.getContentResolver()
-           output_stream = content_resolver.openOutputStream(uri)
-           output_stream.write(b"My file content")
-           output_stream.close()
+
+        try:
+            if results['resultCode'] == Activity.RESULT_OK:
+               uri = results['resultData'].getData()
+               context = self._impl.native
+               content_resolver = context.getContentResolver()
+               output_stream = content_resolver.openOutputStream(uri)
+               output_stream.write(datarecord)
+               output_stream.close()
+        except:
+            pass
+
+##
+## Redisplay all slots on protothrottle window
+##
+
+    def backtoProtothrottle(self, id):
+        self.displayProtothrottleScreen(self.protomessages)
 
 
+##
+## Display load temp screen
+##
 
-
-    def displaySlotWindow(self):
-        pass
-
-
-    def saveSlotA(self, id):
+    def displaySaveStatusScreen(self):
         scan_content = toga.Box(style=Pack(direction=COLUMN, margin=30))
 
-        s = id.id.split(":")
-        slot = "Slot: "+ s[1] + " - " + s[2]
-        self.sid = int(s[1])
+        blank  = toga.Label("   ")
+        scan_content.add(blank)
+
+        self.working_text = Label("", style=Pack(font_size=12, color="#000000"))
+        scan_content.add(self.working_text)
+
+        self.scroller = toga.ScrollContainer(content=scan_content, style=Pack(direction=COLUMN, align_items=CENTER))
+        self.main_window.content = self.scroller
+        self.main_window.show()
+
+##
+## Display slot info
+##
+
+    def displaySlotWindow(self, slot):
+
+        scan_content = toga.Box(style=Pack(direction=COLUMN, margin=30))
+
+        # Ascii ID and Mac at top of display
+        idlabel  = toga.Label(self.buttonDict[self.macAddress], style=Pack(flex=1, color="#000000", align_items=CENTER, font_size=32))
+        maclabel = toga.Label(self.macAddress, style=Pack(flex=1, color="#000000", align_items=CENTER, font_size=12))
+        boxrowA  = toga.Box(children=[idlabel], style=Pack(direction=ROW, align_items=END, margin_top=4))
+        boxrowB  = toga.Box(children=[maclabel], style=Pack(direction=ROW, align_items=END, margin_top=2))
+
+        scan_content.add(boxrowA)
+        scan_content.add(boxrowB)
+
+        self.working_text = Label("", style=Pack(font_size=12, color="#000000"))
+        scan_content.add(self.working_text)
+
+        blank  = toga.Label("   ")
+        boxrow = toga.Box(children=[blank, toga.Divider(), blank], style=Pack(direction=ROW, align_items=END))
+        scan_content.add(boxrow)
 
         idlabel  = toga.Label(slot, style=Pack(flex=1, color="#000000", align_items=CENTER, font_size=32))
         boxrow = toga.Box(children=[idlabel], style=Pack(direction=ROW, align_items=CENTER, margin_top=4))
@@ -605,44 +672,68 @@ class PTApp(toga.App):
         boxrow = toga.Box(children=[blank], style=Pack(direction=ROW, align_items=CENTER, margin_top=4))
         scan_content.add(boxrow)
 
-        self.filename = toga.TextInput(placeholder="Save as (filename)", style=Pack(flex=1))
 
-        boxrow = toga.Box(children=[self.filename], style=Pack(direction=ROW, align_items=CENTER, margin_top=4))
-        scan_content.add(boxrow)     
+        boxrow = toga.Box(children=[blank, toga.Divider(), blank], style=Pack(direction=ROW, align_items=END))
+        scan_content.add(boxrow)
 
-        saveButton = toga.Button("Save File", on_press=self.save_to_app_storage)
-        boxrow = toga.Box(children=[blank, blank, saveButton], style=Pack(direction=ROW, align_items=START, margin_top=4))
-        scan_content.add(boxrow)    
-
-        back = Button(
-            'Back',
-            on_press=self.backtoProtothrottle,
+        scan = Button(
+            'Scan',
+            on_press=self.displayMainWindow,
             style=Pack(width=120, height=60, margin_top=6, background_color="#cccccc", color="#000000", font_size=12)
         )
-        boxrow = toga.Box(children=[back], style=Pack(direction=ROW, align_items=CENTER, margin_top=4))
-        scan_content.add(boxrow)    
- 
+
+
+        boxrow = toga.Box(children=[scan], style=Pack(direction=ROW, align_items=CENTER, margin_top=MARGINTOP))
+        scan_content.add(boxrow)
+
         self.scroller = toga.ScrollContainer(content=scan_content, style=Pack(direction=COLUMN, align_items=CENTER))
         self.main_window.content = self.scroller
         self.main_window.show()
 
-        print ("save slot", id.id)
+
+##
+## Send already collected data to a PT slot
+##
+
+    async def sendSlotData(self, slot, data):
+        slotindex = slot*128
+        i = 0
+
+        while True:
+            lad = slotindex & 0x00ff
+            had = (slotindex & 0xff00) >> 8
+
+            datalist = [ord('W'), lad, had]
+            for j in range(0,12):
+                datalist.append(data[i])
+                i = i + 1
+
+            if i > 119:
+               break
+
+            xbeeFrame = self.Xbee.xbeeBroadCastRequest(48, 154, [ord('W'), lad, had])
+            self.writebuff = bytearray(xbeeFrame)
+            self.writelen = len(self.writebuff)
+
+            await self.connectWrite()
+
+            # read for a verify here?
 
 
-    def backtoProtothrottle(self, id):
-        self.displayProtothrottleScreen(self.protomessages)
+        pass
 
 
 ##
 ## Query the PT for the full data record, then save in local storage
 ##
 
-    async def getSlotData(self, widget):
-        slotindex = self.sid*128
+    async def getSlotData(self, sid):
+        slotindex = sid*128
+        datarecord = [] 
         msgsave = []
+        i = 0
 
         while True:
-        
             lad = slotindex & 0x00ff
             had = (slotindex & 0xff00) >> 8
 
@@ -651,115 +742,36 @@ class PTApp(toga.App):
             self.writelen = len(self.writebuff)
 
             await self.connectWrite()
-            await asyncio.sleep(.1)
-            await self.connectRead()
-
-        # parse out the data the PT sends back
-            msg = self.Xbee.getPacket(self.readbuff)
-            #self.working_text.text = "Reading from PT - offset " + str(slotindex)
-
-            if msg == None:
-               continue
-
-            print (slotindex, msg, len(msg))
-
-            if len(msg) < 28:
-               continue
-
-            datarecord = []                                  # stick the data bytes into a list
-            for j in range(16, len(msg)-1):         # trim off the header info and the checksum from the xbee return message
-               datarecord.append(msg[j])
-
-            i = 0
-            slotindex = slotindex + 12
-            break
-
-
-        while True:                   # get the remainder of the slot data
-            lad = slotindex & 0x00ff
-            had = (slotindex & 0xff00) >> 8
-
-            xbeeFrame = self.Xbee.xbeeBroadCastRequest(48, 154, [ord('R'), lad, had, 12])
-            self.writebuff = bytearray(xbeeFrame)
-            self.writelen = len(self.writebuff)
-
-            await self.connectWrite()
-            await asyncio.sleep(.1)
+#            await asyncio.sleep(.1)
             await self.connectRead()
 
             msg = self.Xbee.getPacket(self.readbuff)
 
-            if msg == None:                     # skip misfires
+            if msg == None:          # got nothing, try again
                continue
 
-            print (slotindex, msg, len(msg))
-
-            if len(msg) < 28:                   # short ones sometimes, not sure why, toss it and retry
+            if len(msg) < 28:        # truncated, try again
                continue
 
-            if msgsave == msg:
+            if msg == msgsave:       # duplicate, try again
                continue
 
             msgsave = msg
 
-            for j in range(16, len(msg)-1):     # trim off stuff we don't need
+            self.working_text = "Read PT memory " + str(slotindex)
+            print (slotindex, msg, len(msg))
+
+            for j in range(16, len(msg)-1):         # trim off the header info and the checksum from the xbee return message
                datarecord.append(msg[j])
 
-            #self.working_text.text = "Reading from PT - offset " + str(slotindex)
             slotindex = slotindex + 12
 
             i = i + 1
-
-            if i > 10:
-               notdone = False
+            if i > 9:
                break
 
-        self.record = ""
-        for d in datarecord:
-            self.record = self.record + str(d) + ":"
-
+        self.working_text = ""
         return datarecord
-
-
-
-
-#    async def openFileDialog(self):
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-    async def oldSlot(self, widget):
-
-        fileChose = Intent(Intent.ACTION_GET_CONTENT)
-        fileChose.addCategory(Intent.CATEGORY_OPENABLE)
-        fileChose.setType("*/*")
-
-        # Assuming `app` is your toga.App object
-        results = await self._impl.intent_result(Intent.createChooser(fileChose, "Choose a file"))
-
-        print (dir(results))
-
-        Uri = jclass('android.net.Uri')
-        fileUri = Uri.fromFile(results)
-        context = self._impl.native
-        bytesJarray = bytes((context.getContentResolver().openInputStream(fileUri).readAllBytes()))
-
-        # Ask if sure?
-
-        print (len(bytesJarray))
-
-        # send slot data to Protothrottle
 
 
 
