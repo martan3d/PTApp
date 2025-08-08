@@ -154,7 +154,7 @@ class PTApp(toga.App):
 ##
 
     async def start_discover(self, id):
-        self.working_text.text = "Scanning for Receivers..."
+        self.working_text.text = "Scanning Network for Xbee Devices..."
 
         # Broadcast Network Discovery, all Xbees respond with MAC and ascii ID
         self.writebuff = bytearray([0x7E, 0x00, 0x04, 0x08, 0x01, 0x4E, 0x44, 0x64])
@@ -319,7 +319,7 @@ class PTApp(toga.App):
         msgsave = []
         slotindex = 128
 
-        MAXSLOTS = 17    # maximum number of slots we can retrieve?  Should be 20 but gets 'stuck' if we ask for more.
+        MAXSLOTS = 10    # maximum number of slots we can retrieve?  Should be 20 but gets 'stuck' if we ask for more.
 
         i = 0
 
@@ -338,7 +338,6 @@ class PTApp(toga.App):
 
             # parse out the data the PT sends back
             msg = self.Xbee.getPacket(self.readbuff)
-            self.working_text.text = "Get offset " + str(slotindex)
 
             if msg == None:
                continue
@@ -350,6 +349,9 @@ class PTApp(toga.App):
                continue
 
             i += 1
+
+            self.working_text.text = "Get offset " + str(slotindex)
+
             print (i, msg, slotindex, len(msg))
 
             msgsave = msg
@@ -357,6 +359,7 @@ class PTApp(toga.App):
             slotindex = slotindex + 128
 
             if slotindex > (128*MAXSLOTS):
+               self.working_text.text = ""
                return messages      
 
 
@@ -407,12 +410,10 @@ class PTApp(toga.App):
         # Check USB Permissions, get them if needed, this does not return if you don't accept
         self.checkPermission()
 
-        print ("Get connection")
         self.connection = self.usbmanager.openDevice(self.device)
         self.interface = self.device.getInterface(0)
         self.readEndpoint = self.interface.getEndpoint(0)
         self.writeEndpoint = self.interface.getEndpoint(1)
-        print ("done connection")
 
         buf = None
 
@@ -485,8 +486,12 @@ class PTApp(toga.App):
         scan_content.add(boxrowB)
 
         blank  = toga.Label("   ")
+        scan_content.add(blank)
 
-        msave = 0
+        self.pt_text = Label("", style=Pack(font_size=12, color="#000000"))
+        scan_content.add(self.pt_text)
+
+        msave = []
         slot = 0
 
         for m in message:
@@ -495,10 +500,11 @@ class PTApp(toga.App):
                lh = m[17] << 8
                adr = lh | la                       # first two bytes are the locomotive address, go ahead and print that 
 
-               if adr == msave:                    # toss any duplicates
+               if m[7:] == msave[7:]:                      # toss any duplicates
                   continue
 
-               msave = adr
+               msave = m
+
                p0 = f"{adr:4d}"
 
                idS = "S:"+str(slot)+":"+p0
@@ -543,223 +549,186 @@ class PTApp(toga.App):
         self.main_window.show()
 
 ##
-## load slot data from app memory, then send to PT slot
+## load slot data from app memory (disk), then send to PT slot
+##
 
-
-    async def loadSlot(self, widget):
-
-        print (widget)
-
-        fileChose = Intent(Intent.ACTION_GET_CONTENT)
-        fileChose.addCategory(Intent.CATEGORY_OPENABLE)
-        fileChose.setType("*/*")
-
-        # Assuming `app` is your toga.App object
-        results = await self._impl.intent_result(Intent.createChooser(fileChose, "Choose a file"))
-        data = results['resultData'].getData()
-        context = self._impl.native
-        bytesJarray = bytes((context.getContentResolver().openInputStream(data).readAllBytes()))
-
-        print ("total length of file ", len(bytesJarray))
-
-
-
-    async def saveSlot(self, widget):
-        print ("SaveSlot") 
-        # Create an Intent for creating a document
-        intent = Intent(Intent.ACTION_CREATE_DOCUMENT)
-        intent.addCategory(Intent.CATEGORY_OPENABLE)
-#         intent.setType("text/plain")  # Or desired MIME type
-        intent.setType("*/*")  # desired MIME type
-        intent.putExtra(Intent.EXTRA_TITLE, "NewDocument.txt")
-
-        results = await self.app._impl.intent_result(intent)
-#        if results['resultCode'] == jclass('android.app.Activity').RESULT_OK:
-        if results['resultCode'] == Activity.RESULT_OK:
-           uri = results['resultData'].getData()
-           context = self._impl.native
-           content_resolver = context.getContentResolver()
-           output_stream = content_resolver.openOutputStream(uri)
-           output_stream.write(b"My file content")
-           output_stream.close()
-
-
-
-
-    def displaySlotWindow(self):
-        pass
-
-
-    def saveSlotA(self, id):
-        scan_content = toga.Box(style=Pack(direction=COLUMN, margin=30))
+    async def loadSlot(self, id):
 
         s = id.id.split(":")
         slot = "Slot: "+ s[1] + " - " + s[2]
         self.sid = int(s[1])
 
-        idlabel  = toga.Label(slot, style=Pack(flex=1, color="#000000", align_items=CENTER, font_size=32))
-        boxrow = toga.Box(children=[idlabel], style=Pack(direction=ROW, align_items=CENTER, margin_top=4))
-        scan_content.add(boxrow)
-
-        blank  = toga.Label("   ", style=Pack(width=200))
-        boxrow = toga.Box(children=[blank], style=Pack(direction=ROW, align_items=CENTER, margin_top=4))
-        scan_content.add(boxrow)
-
-        self.filename = toga.TextInput(placeholder="Save as (filename)", style=Pack(flex=1))
-
-        boxrow = toga.Box(children=[self.filename], style=Pack(direction=ROW, align_items=CENTER, margin_top=4))
-        scan_content.add(boxrow)     
-
-        saveButton = toga.Button("Save File", on_press=self.save_to_app_storage)
-        boxrow = toga.Box(children=[blank, blank, saveButton], style=Pack(direction=ROW, align_items=START, margin_top=4))
-        scan_content.add(boxrow)    
-
-        back = Button(
-            'Back',
-            on_press=self.backtoProtothrottle,
-            style=Pack(width=120, height=60, margin_top=6, background_color="#cccccc", color="#000000", font_size=12)
-        )
-        boxrow = toga.Box(children=[back], style=Pack(direction=ROW, align_items=CENTER, margin_top=4))
-        scan_content.add(boxrow)    
- 
-        self.scroller = toga.ScrollContainer(content=scan_content, style=Pack(direction=COLUMN, align_items=CENTER))
-        self.main_window.content = self.scroller
-        self.main_window.show()
-
-        print ("save slot", id.id)
-
-
-    def backtoProtothrottle(self, id):
-        self.displayProtothrottleScreen(self.protomessages)
-
-
-##
-## Query the PT for the full data record, then save in local storage
-##
-
-    async def getSlotData(self, widget):
-        slotindex = self.sid*128
-        msgsave = []
-
-        while True:
-        
-            lad = slotindex & 0x00ff
-            had = (slotindex & 0xff00) >> 8
-
-            xbeeFrame = self.Xbee.xbeeBroadCastRequest(48, 154, [ord('R'), lad, had, 12])
-            self.writebuff = bytearray(xbeeFrame)
-            self.writelen = len(self.writebuff)
-
-            await self.connectWrite()
-            await asyncio.sleep(.1)
-            await self.connectRead()
-
-        # parse out the data the PT sends back
-            msg = self.Xbee.getPacket(self.readbuff)
-            #self.working_text.text = "Reading from PT - offset " + str(slotindex)
-
-            if msg == None:
-               continue
-
-            print (slotindex, msg, len(msg))
-
-            if len(msg) < 28:
-               continue
-
-            datarecord = []                                  # stick the data bytes into a list
-            for j in range(16, len(msg)-1):         # trim off the header info and the checksum from the xbee return message
-               datarecord.append(msg[j])
-
-            i = 0
-            slotindex = slotindex + 12
-            break
-
-
-        while True:                   # get the remainder of the slot data
-            lad = slotindex & 0x00ff
-            had = (slotindex & 0xff00) >> 8
-
-            xbeeFrame = self.Xbee.xbeeBroadCastRequest(48, 154, [ord('R'), lad, had, 12])
-            self.writebuff = bytearray(xbeeFrame)
-            self.writelen = len(self.writebuff)
-
-            await self.connectWrite()
-            await asyncio.sleep(.1)
-            await self.connectRead()
-
-            msg = self.Xbee.getPacket(self.readbuff)
-
-            if msg == None:                     # skip misfires
-               continue
-
-            print (slotindex, msg, len(msg))
-
-            if len(msg) < 28:                   # short ones sometimes, not sure why, toss it and retry
-               continue
-
-            if msgsave == msg:
-               continue
-
-            msgsave = msg
-
-            for j in range(16, len(msg)-1):     # trim off stuff we don't need
-               datarecord.append(msg[j])
-
-            #self.working_text.text = "Reading from PT - offset " + str(slotindex)
-            slotindex = slotindex + 12
-
-            i = i + 1
-
-            if i > 10:
-               notdone = False
-               break
-
-        self.record = ""
-        for d in datarecord:
-            self.record = self.record + str(d) + ":"
-
-        return datarecord
-
-
-
-
-#    async def openFileDialog(self):
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-    async def oldSlot(self, widget):
-
         fileChose = Intent(Intent.ACTION_GET_CONTENT)
         fileChose.addCategory(Intent.CATEGORY_OPENABLE)
         fileChose.setType("*/*")
 
-        # Assuming `app` is your toga.App object
         results = await self._impl.intent_result(Intent.createChooser(fileChose, "Choose a file"))
 
-        print (dir(results))
+        if True: #try:
+           data = results['resultData'].getData()
+           context = self._impl.native
+           bytesJarray = bytes((context.getContentResolver().openInputStream(data).readAllBytes()))
 
-        Uri = jclass('android.net.Uri')
-        fileUri = Uri.fromFile(results)
-        context = self._impl.native
-        bytesJarray = bytes((context.getContentResolver().openInputStream(fileUri).readAllBytes()))
+           await self.sendSlotData(self.sid, list(bytesJarray))
 
-        # Ask if sure?
+#        except:
+#           self.working_text.text = "Load Canceled"
+#           await asyncio.sleep(.2)
 
-        print (len(bytesJarray))
+        self.working_text.text = ""
 
-        # send slot data to Protothrottle
+
+
+##
+## Save slot data to internal Documents Folder
+##
+
+    async def saveSlot(self, id):
+        s = id.id.split(":")
+        slot = "Slot: "+ s[1] + " - " + s[2]
+        self.sid = int(s[1])
+        filename = s[2] + ".pts"   # Protothrottle single slot config
+
+        slotdata = await self.getSlotData(self.sid+1)
+        datarecord = bytearray(slotdata)
+
+        intent = Intent(Intent.ACTION_CREATE_DOCUMENT)
+        intent.addCategory(Intent.CATEGORY_OPENABLE)
+#         intent.setType("text/plain")  # Or desired MIME type
+        intent.setType("*/*")  # desired MIME type
+        intent.putExtra(Intent.EXTRA_TITLE, filename)
+        
+        results = await self.app._impl.intent_result(intent)
+
+        try:
+            if results['resultCode'] == Activity.RESULT_OK:
+               uri = results['resultData'].getData()
+               context = self._impl.native
+               content_resolver = context.getContentResolver()
+               output_stream = content_resolver.openOutputStream(uri)
+               output_stream.write(datarecord)
+               output_stream.close()
+        except:
+            pass
+
+##
+## Redisplay all slots on protothrottle window
+##
+
+    def backtoProtothrottle(self, id):
+        self.displayProtothrottleScreen(self.protomessages)
+
+##
+## Send already collected data to a PT slot
+##
+
+
+    async def sendSlotData(self, slot, data):
+        MAXRETRIES = 30
+        slotindex = slot*128
+        i = 0
+
+        while i < 52:
+            lad = slotindex & 0x00ff
+            had = (slotindex & 0xff00) >> 8
+
+            datalist = [ord('W'), lad, had]
+            for j in range(0,12):
+                try:
+                   datalist.append(data[i])
+                except:
+                   i = 65
+
+                i = i + 1
+
+            xbeeFrame = self.Xbee.xbeeBroadCastRequest(48, 154, datalist)
+
+            self.writebuff = bytearray(xbeeFrame)
+            self.writelen = len(self.writebuff)
+
+            await self.connectWrite()
+            await asyncio.sleep(.1)
+
+            retries = 0
+            packetvalid = False
+
+            # Read back data from PT to see if it 'took'
+
+            for x in range(0, MAXRETRIES):
+                xbeeFrame = self.Xbee.xbeeBroadCastRequest(48, 154, [ord('R'), lad, had, 12])
+                self.writebuff = bytearray(xbeeFrame)
+                self.writelen = len(self.writebuff)
+
+                await self.connectWrite()
+                await asyncio.sleep(.1)
+                await self.connectRead()
+
+                msg = self.Xbee.getPacket(self.readbuff)
+                print ("---------- offset", slotindex, "retry ", x, "total bytes ", i)
+                print ("WR data ", datalist[3:])
+                print ("RD data ", msg[16:])
+                
+                # readback - if compare is true, break and move on to next 12 bytes
+                if datalist[3:] == msg[16:]:
+                   print ("MATCH")
+                   packetvalid = True
+                   break
+                else:
+                   print ("FAILED MATCH")
+
+            if packetvalid:
+               slotindex = slotindex + 12   # only increment if read/write matches
+
+
+##
+## Query the PT for the full data record return as list
+##
+
+    async def getSlotData(self, sid):
+        slotindex = sid*128
+        datarecord = [] 
+        msgsave = []
+        i = 0
+
+        while True:
+            lad = slotindex & 0x00ff
+            had = (slotindex & 0xff00) >> 8
+
+            xbeeFrame = self.Xbee.xbeeBroadCastRequest(48, 154, [ord('R'), lad, had, 12])
+            self.writebuff = bytearray(xbeeFrame)
+            self.writelen = len(self.writebuff)
+
+            await self.connectWrite()
+            await asyncio.sleep(.1)
+            await self.connectRead()
+
+            msg = self.Xbee.getPacket(self.readbuff)
+
+            if msg == None:          # got nothing, try again
+               continue
+
+            if len(msg) < 28:        # truncated, try again
+               continue
+
+            if msg == msgsave:       # duplicate, try again
+               continue
+
+            msgsave = msg
+
+            self.working_text.text = "Read PT memory " + str(slotindex)
+            print (slotindex, msg, len(msg))
+
+            for j in range(16, len(msg)-1):         # trim off the header info and the checksum from the xbee return message
+               datarecord.append(msg[j])
+
+            slotindex = slotindex + 12
+
+            i = i + 1
+            if i > 6:
+               break
+
+        self.working_text.text = ""
+        return datarecord
 
 
 
