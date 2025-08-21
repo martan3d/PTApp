@@ -12,6 +12,6 @@ You will also need the XCTU program from the Xbee manufacturer, Digi, it's free.
 
 As far as configuration, the Xbee must have the 802.15.4 TH firmware installed, many are shipped with the Digimesh firmware, that won't work. XCTU will let you install the latest if needed using the 'update' button at the top. Once the firmware is verified, you have to change a few configuration items in the chip. Set the ID Network PAN ID to 225. Find the API Enable and set it to API Mode without Escapes (1). Just below that, find the baud rate and set it to 38400. Everything else you can leave at the defaults.
 
-- https://www.amazon.com/dp/B0744BKDRD?ref=ppx_yo2ov_dt_b_fed_asin_title&th=1
-- https://www.amazon.com/dp/B07DMGF28S?ref=ppx_yo2ov_dt_b_fed_asin_title
 - https://www.sparkfun.com/xbee-3-module-pcb-antenna.html
+- https://www.amazon.com/dp/B07DMGF28S?ref=ppx_yo2ov_dt_b_fed_asin_title
+- https://www.amazon.com/dp/B0744BKDRD?ref=ppx_yo2ov_dt_b_fed_asin_title&th=1
