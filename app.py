@@ -109,7 +109,6 @@ DECL  = 1063
 DECLV = 1163
 
 
-
 adprot = { 0x30 :'A', 0x31 :'B', 0x32 :'C', 0x33 :'D', 0x34 :'E', 0x35 :'F', 0x36 : 'G', 0x37 : 'H', 0x38 : 'I', 0x39 : 'J',
            0x3a : 'K', 0x3b : 'L', 0x3c : 'M', 0x3d : 'N', 0x3e : 'O', 0x3f : 'P', 0x40 : 'Q', 0x41 : 'R', 0x42 : 'S',
            0x43 : 'T', 0x44 : 'U', 0x45 : 'V', 0x46 : 'W', 0x47 : 'X', 0x48 : 'Y', 0x49 : 'Z' }
@@ -121,6 +120,15 @@ adprot = { 0x30 :'A', 0x31 :'B', 0x32 :'C', 0x33 :'D', 0x34 :'E', 0x35 :'F', 0x3
 class PTApp(toga.App):
 
     def startup(self):
+
+        self.sliderhandlers = { SV0LV : self.handleServ0LowLimit,
+                                SV0HV : self.handleServo0HighLimit,
+                                SV1LV : self.handleServ1LowLimit,
+                                SV1HV : self.handleServo1HighLimit,
+                                SV2LV : self.handleServ2LowLimit,
+                                SV2HV : self.handleServo2HighLimit
+                              }
+                               
         self.Xbee = xbeeController()
         self.main_window = toga.MainWindow(title=self.formal_name)
         self.setupAndroidSerialPort()
@@ -155,6 +163,8 @@ class PTApp(toga.App):
 
     async def start_discover(self, id):
         self.working_text.text = "Scanning Network for Xbee Devices..."
+
+        self.saveWidgetId = None
 
         # Broadcast Network Discovery, all Xbees respond with MAC and ascii ID
         self.writebuff = bytearray([0x7E, 0x00, 0x04, 0x08, 0x01, 0x4E, 0x44, 0x64])
@@ -202,6 +212,11 @@ class PTApp(toga.App):
     async def connectToClient(self, widget):
         self.working_text.text = "Requesting Data from Receiver..."
         self.protomessage = []
+
+        if self.saveWidgetId != widget.id:
+           self.retries = 0
+
+        self.saveWidgetId = widget.id
 
         # if we have tried > 2 times and no answer, probably not a receiver, look for a protothrottle
         if self.retries > 1:
@@ -928,43 +943,56 @@ class PTApp(toga.App):
         boxrow = toga.Box(children=[desc, mode], style=Pack(direction=ROW, align_items=END, margin_top=20))
         scan_content.add(boxrow)
 
-       ############################################################# 
+        ############################################################# 
 
         boxrow = toga.Box(children=[blank, toga.Divider(), blank], style=Pack(direction=COLUMN, margin_top=20))
         scan_content.add(boxrow)
 
-       ############################################################# Servo 0 Config
+        ############################################################# Servo 0 Config
+        svrr = message[32]
+        checked = False
+        if (int(svrr) & 0x01) == 1:
+           checked = True
 
         desc   = toga.Label("Servo 0", style=Pack(width=270, align_items=END, font_size=18))
-        rev    = toga.Switch("Reverse", id=SVR0, value=False, on_change=self.change_ptid)
+        rev    = toga.Switch("Reverse", id=SVR0, value=checked, on_change=self.change_ptid)
         boxrow = toga.Box(children=[desc, rev], style=Pack(direction=ROW, align_items=END, margin_top=8))
         scan_content.add(boxrow)
 
-        btn    = toga.Button(id=SRVP0, text="Prg", on_press = self.sendPrgCommand, style=Pack(width=55, height=55, margin_top=6, background_color="#bbbbbb", color="#000000", font_size=12))
-        desc   = toga.Label("     Function Code", style=Pack(width=282, align_items=END, font_size=12))
-        func   = toga.NumberInput(on_change=self.change_ptid, min=0, max=99, style=Pack(flex=1, height=48, width=24, font_size=12, background_color="#eeeeee", color="#000000"))
-        boxrow = toga.Box(children=[desc, func, btn], style=Pack(direction=ROW, align_items=END, margin_top=1))
-        scan_content.add(boxrow)
+# Servo zero always follows the throttle, there is no function code
+#        btn    = toga.Button(id=SRVP0, text="Prg", on_press = self.sendPrgCommand, style=Pack(width=55, height=55, margin_top=6, background_color="#bbbbbb", color="#000000", font_size=12))
+#        desc   = toga.Label("     Function Code", style=Pack(width=282, align_items=END, font_size=12))
+#       func   = toga.NumberInput(on_change=self.change_ptid, min=0, max=99, style=Pack(flex=1, height=48, width=24, font_size=12, background_color="#eeeeee", color="#000000"))
+#        boxrow = toga.Box(children=[desc, func, btn], style=Pack(direction=ROW, align_items=END, margin_top=1))
+#        scan_content.add(boxrow)
+
+        svlo0 = message[17]        # servo 0 low limit
+        ch    = message[18] << 8
+        svlo0 = svlo0 | ch
 
         desc   = toga.Label("     Low Limit", style=Pack(width=244, align_items=END, font_size=12))
-        entry0 = toga.NumberInput(on_change=self.change_ptid, min=0, max=1000, style=Pack(flex=1, height=48, width=LNUMWIDTH, font_size=18, background_color="#eeeeee", color="#000000"))
+        entry0 = toga.NumberInput(on_change=self.change_ptid, min=0, max=1000, value=svlo0, style=Pack(flex=1, height=48, width=LNUMWIDTH, font_size=18, background_color="#eeeeee", color="#000000"))
         btn    = toga.Button(id=SV0L, text="Prg", on_press = self.sendPrgCommand, style=Pack(width=55, height=55, margin_top=6, background_color="#bbbbbb", color="#000000", font_size=12))
         boxrow = toga.Box(children=[desc, entry0, btn], style=Pack(direction=ROW, align_items=END, margin_top=1))
         scan_content.add(boxrow)
 
         desc   = toga.Label(" ", style=Pack(width=20, align_items=END, font_size=18))
-        adj0   = toga.Slider(value=0, min=0, max=1000, on_change=self.setLimit, style=Pack(width=320, height=20))
+        adj0   = toga.Slider(id=SV0LV, value=svlo0, min=0, max=1000, on_change=self.setLimit, style=Pack(width=320, height=20))
         boxrow = toga.Box(children=[desc, adj0], style=Pack(direction=ROW, align_items=END))
         scan_content.add(boxrow)
 
+        svhi0 = message[19]
+        ch    = message[20] << 8          # 11,12
+        svhi0 = svhi0 | ch
+
         btn    = toga.Button(id=SV0H, text="Prg", on_press = self.sendPrgCommand, style=Pack(width=55, height=55, margin_top=6, background_color="#bbbbbb", color="#000000", font_size=12))
         desc   = toga.Label("     High Limit", style=Pack(width=244, align_items=END, font_size=12))
-        entry1  = toga.NumberInput(on_change=self.change_ptid, min=0, max=9999, style=Pack(flex=1, height=48, width=LNUMWIDTH, font_size=18, background_color="#eeeeee", color="#000000"))
+        entry1 = toga.NumberInput(on_change=self.change_ptid, min=0, max=9999, value=svhi0, style=Pack(flex=1, height=48, width=LNUMWIDTH, font_size=18, background_color="#eeeeee", color="#000000"))
         boxrow = toga.Box(children=[desc, entry1, btn], style=Pack(direction=ROW, align_items=END, margin_top=1))
         scan_content.add(boxrow)
 
         desc   = toga.Label(" ", style=Pack(width=20, align_items=END, font_size=18))
-        adj0   = toga.Slider(value=0, min=0, max=1000, on_change=self.setLimit, style=Pack(width=320, height=20))
+        adj0   = toga.Slider(id=SV0HV, value=svhi0, min=0, max=1000, on_change=self.setLimit, style=Pack(width=320, height=20))
         boxrow = toga.Box(children=[desc, adj0], style=Pack(direction=ROW, align_items=END))
         scan_content.add(boxrow)
 
@@ -973,38 +1001,51 @@ class PTApp(toga.App):
         boxrow = toga.Box(children=[blank, toga.Divider(), blank], style=Pack(direction=COLUMN, margin_top=20))
         scan_content.add(boxrow)
 
-       ############################################################# Servo 1 Config
+        ############################################################# Servo 1 Config
+        checked = False
+        if (int(svrr) & 0x02) == 2:
+           checked = True
 
         desc   = toga.Label("Servo 1", style=Pack(width=270, align_items=END, font_size=18))
-        rev    = toga.Switch("Reverse", id=SVR1, value=False, on_change=self.change_ptid)
+        rev    = toga.Switch("Reverse", id=SVR1, value=checked, on_change=self.change_ptid)
         boxrow = toga.Box(children=[desc, rev], style=Pack(direction=ROW, align_items=END, margin_top=8))
         scan_content.add(boxrow)
 
+        sv1func = message[30]      # servo 1 function code
+
         btn    = toga.Button(id=SRVP1, text="Prg", on_press = self.sendPrgCommand, style=Pack(width=55, height=55, margin_top=6, background_color="#bbbbbb", color="#000000", font_size=12))
         desc   = toga.Label("     Function Code", style=Pack(width=282, align_items=END, font_size=12))
-        func   = toga.NumberInput(on_change=self.change_ptid, min=0, max=99, style=Pack(flex=1, height=48, width=24, font_size=12, background_color="#eeeeee", color="#000000"))
+        func   = toga.NumberInput(value=sv1func, on_change=self.change_ptid, min=0, max=99, style=Pack(flex=1, height=48, width=24, font_size=12, background_color="#eeeeee", color="#000000"))
         boxrow = toga.Box(children=[desc, func, btn], style=Pack(direction=ROW, align_items=END, margin_top=1))
         scan_content.add(boxrow)
 
+        svlo1 = message[21]        # servo 1 low limit
+        ch    = message[22] << 8
+        svlo1 = svlo1 | ch
+
         desc   = toga.Label("     Low Limit", style=Pack(width=244, align_items=END, font_size=12))
-        entry0 = toga.NumberInput(on_change=self.change_ptid, min=0, max=1000, style=Pack(flex=1, height=48, width=LNUMWIDTH, font_size=18, background_color="#eeeeee", color="#000000"))
+        entry0 = toga.NumberInput(value=svlo1, on_change=self.change_ptid, min=0, max=1000, style=Pack(flex=1, height=48, width=LNUMWIDTH, font_size=18, background_color="#eeeeee", color="#000000"))
         btn    = toga.Button(id=SV1L, text="Prg", on_press = self.sendPrgCommand, style=Pack(width=55, height=55, margin_top=6, background_color="#bbbbbb", color="#000000", font_size=12))
         boxrow = toga.Box(children=[desc, entry0, btn], style=Pack(direction=ROW, align_items=END, margin_top=1))
         scan_content.add(boxrow)
 
         desc   = toga.Label(" ", style=Pack(width=20, align_items=END, font_size=18))
-        adj0   = toga.Slider(value=0, min=0, max=1000, on_change=self.setLimit, style=Pack(width=320, height=20))
+        adj0   = toga.Slider(value=svlo1, min=0, max=1000, on_change=self.setLimit, style=Pack(width=320, height=20))
         boxrow = toga.Box(children=[desc, adj0], style=Pack(direction=ROW, align_items=END))
         scan_content.add(boxrow)
 
+        svhi1 = message[23]
+        ch    = message[24] << 8   # servo 1 high limit
+        svhi1 = svhi1 | ch
+
         btn    = toga.Button(id=SV1H, text="Prg", on_press = self.sendPrgCommand, style=Pack(width=55, height=55, margin_top=6, background_color="#bbbbbb", color="#000000", font_size=12))
         desc   = toga.Label("     High Limit", style=Pack(width=244, align_items=END, font_size=12))
-        entry1  = toga.NumberInput(on_change=self.change_ptid, min=0, max=9999, style=Pack(flex=1, height=48, width=LNUMWIDTH, font_size=18, background_color="#eeeeee", color="#000000"))
+        entry1  = toga.NumberInput(value=svhi1, on_change=self.change_ptid, min=0, max=9999, style=Pack(flex=1, height=48, width=LNUMWIDTH, font_size=18, background_color="#eeeeee", color="#000000"))
         boxrow = toga.Box(children=[desc, entry1, btn], style=Pack(direction=ROW, align_items=END, margin_top=1))
         scan_content.add(boxrow)
 
         desc   = toga.Label(" ", style=Pack(width=20, align_items=END, font_size=18))
-        adj0   = toga.Slider(value=0, min=0, max=1000, on_change=self.setLimit, style=Pack(width=320, height=20))
+        adj0   = toga.Slider(value=svhi1, min=0, max=1000, on_change=self.setLimit, style=Pack(width=320, height=20))
         boxrow = toga.Box(children=[desc, adj0], style=Pack(direction=ROW, align_items=END))
         scan_content.add(boxrow)
 
@@ -1014,9 +1055,12 @@ class PTApp(toga.App):
         scan_content.add(boxrow)
 
         ############################################################# Servo 2 Config
+        checked = False
+        if (int(svrr) & 0x04) == 4:
+           checked = True
 
         desc   = toga.Label("Servo 2", style=Pack(width=270, align_items=END, font_size=18))
-        rev    = toga.Switch("Reverse", id=SVR2, value=False, on_change=self.change_ptid)
+        rev    = toga.Switch("Reverse", id=SVR2, value=checked, on_change=self.change_ptid)
         boxrow = toga.Box(children=[desc, rev], style=Pack(direction=ROW, align_items=END, margin_top=8))
         scan_content.add(boxrow)
 
@@ -1069,8 +1113,33 @@ class PTApp(toga.App):
         self.main_window.show()
 
 
-    def setLimit(self, id):
-        pass
+    def setLimit(self, widget):
+        print ("Change Slider ", widget.id)
+        print (self.sliderhandlers)
+        id = int(widget.id)
+        method = self.sliderhandlers[id]
+        method(int(widget.value))
+        
+    def handleServ0LowLimit(self, value):
+        print ("Change Low Limit 0 to ", value)
+
+    def handleServ1LowLimit(self, value):
+        print ("Change Low Limit 1 to ", value)
+
+    def handleServ2LowLimit(self, value):
+        print ("Change Low Limit 2 to ", value)
+
+    def handleServo0HighLimit(self, value):
+        print ("Change High Limit 0 to ", value)
+
+    def handleServo1HighLimit(self, value):
+        print ("Change High Limit 1 to ", value)
+
+    def handleServo2HighLimit(self, value):
+        print ("Change High Limit 2 to ", value)
+
+
+
 
 
     def displayPhysicsScreen(self, button, message):
