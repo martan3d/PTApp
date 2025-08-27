@@ -15,3 +15,5 @@ As far as configuration, the Xbee must have the 802.15.4 TH firmware installed, 
 - https://www.sparkfun.com/xbee-3-module-pcb-antenna.html
 - https://www.amazon.com/dp/B07DMGF28S?ref=ppx_yo2ov_dt_b_fed_asin_title
 - https://www.amazon.com/dp/B0744BKDRD?ref=ppx_yo2ov_dt_b_fed_asin_title&th=1
+  
+<img width="1024" height="768" alt="A1" src="https://github.com/user-attachments/assets/459f6898-82cb-4244-90ca-42e83de9416f" />
