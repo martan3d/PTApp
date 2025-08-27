@@ -1152,28 +1152,35 @@ class PTApp(toga.App):
         await self.setServoData(0, rev, fc, low, hi)
 
     async def handleServo1(self):
-        rev  = self.app.widgets[SV1R].value
-        f   = "00" + self.app.widgets[SV1FC].value
+        if self.app.widgets[SV1R].value:
+           rev = "1"
+        else:
+           rev = "0"
+        f   = "00" + str(self.app.widgets[SV1FC].value)
         fc  = f[-2:]
-        l   = "0000" + self.app.widgets[SV1LV].value
+        l   = "0000" + str(self.app.widgets[SV1LV].value)
         low = l[-4:]
-        h   = "0000" + self.app.widgets[SV1HV].value
+        h   = "0000" + str(self.app.widgets[SV1HV].value)
         hi  = h[-4:]
         await self.setServoData(1, rev, fc, low, hi)
 
     async def handleServo2(self):
-        rev  = self.app.widgets[SV2R].value
-        f   = "00" + self.app.widgets[SV2FC].value
+        if self.app.widgets[SV2R].value:
+           rev = "1"
+        else:
+           rev = "0"
+        f   = "00" + str(self.app.widgets[SV2FC].value)
         fc  = f[-2:]
-        l   = "0000" + self.app.widgets[SV2LV].value
+        l   = "0000" + str(self.app.widgets[SV2LV].value)
         low = l[-4:]
-        h   = "0000" + self.app.widgets[SV2HV].value
+        h   = "0000" + str(self.app.widgets[SV2HV].value)
         hi  = h[-4:]
-        await setServoData(2, rev, fc, low, hi)
+        await self.setServoData(2, rev, fc, low, hi)
 
     async def setServoData(self, num, rev, func, low, hi):
         data = chr(SETSERVOCONFIG) + str(num) + hi[0] + hi[1] + hi[2] + hi[3] + low[0] + low[1] + low[2] + low[3] + rev + func[0] + func[1] + '3456789'
         buff = self.Xbee.buildXbeeTransmitData(self.Xbee.buildAddress(self.macAddress), data)
+        print ("write buffer ", buff)
         self.writebuff = bytearray(buff)
         self.writelen = len(self.writebuff)
         await self.connectWrite()
