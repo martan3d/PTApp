@@ -248,7 +248,7 @@ class PTApp(toga.App):
 
     async def connectToClient(self, widget):
         self.working_text.text = "Requesting Data from Receiver..."
-        self.protomessage = []
+        self.message = []
 
         if self.saveWidgetId != widget.id:
            self.retries = 0
@@ -275,7 +275,7 @@ class PTApp(toga.App):
         await self.connectRead()
 
         # find the message we need, it's a specific API response from the receiver
-        self.message = await self.parseReturnData(self.readlen, self.readbuff)
+        self.message = await self.parseReturnData(self.readlen, self.readbuff, 87)
         print ("self.message Rx Query ", self.message)
 
         # save the mac address
@@ -289,9 +289,6 @@ class PTApp(toga.App):
            return
 
         if self.message[3] == 129:     # got a valid one, extract the data and build the display
-
-           # query physics and notches here, then go to main screen
-
            self.displayMainWidgetScreen(widget, self.message)
        
 ##
@@ -361,15 +358,34 @@ class PTApp(toga.App):
         if len(self.protomessages) != 0:
            self.working_text.text = ""
            self.displayProtothrottleScreen(self.protomessages)
+        else:
+           self.retries = 0
+           self.working_text.text = "No Protothrottle Found..."
+           await asyncio.sleep(.25)
+           self.working_text.text = ""
 
 ##
 ## Send MRBUS requests and accumulate responses
 ##
 
     async def queryProtothrottle(self):
-        self.working_text.text = "Retrieve Slot Data from Protothrottle"
-        await asyncio.sleep(.25)
+
+        lad = slotindex & 0x00ff
+        had = (slotindex & 0xff00) >> 8
+
+        xbeeFrame = self.Xbee.xbeeBroadCastRequest(48, 154, [ord('R'), lad, had, 12])
+        self.writebuff = bytearray(xbeeFrame)
+        self.writelen = len(self.writebuff)
+
+        await self.connectWrite()
+        await asyncio.sleep(.1)
         await self.connectRead()
+
+        if self.readbuff == []:
+           return []
+
+        self.working_text.text = "Retrieve Slot Data from Protothrottle"
+
         messages = []
         msgsave = []
         slotindex = 128
@@ -422,7 +438,7 @@ class PTApp(toga.App):
 ## Parse return data looking for 16 bit return and Receiver return data
 ##
 
-    async def parseReturnData(self, size, data):
+    async def parseReturnData(self, size, data, msgcode):
         messages = []
         msg = []
         if size > 0:
@@ -441,7 +457,7 @@ class PTApp(toga.App):
 
         for msg in messages:
             if len(msg) > 20:
-               if msg[3] == 129 and msg[9] == 87:   # must be 16 bit return packet and a 'W' in the message to be valid
+               if msg[3] == 129 and msg[9] == msgcode:   # must be 16 bit return packet and a 'W' in the message to be valid
                   return msg
 
         return []
@@ -817,7 +833,7 @@ class PTApp(toga.App):
         # Render PT address on the screen
         btn    = toga.Button(id=PTID, text="Prg", on_press = self.change_ptidaddr, style=Pack(width=55, height=55, margin_top=6, background_color="#bbbbbb", color="#000000", font_size=12))
         desc   = toga.Label("Protothrottle ID", style=Pack(width=265, align_items=END, font_size=18))
-        entry  = toga.TextInput(id=PTIDV, on_change=self.change_ptidaddr, value=adr, style=Pack(height=45, justify_content="center", width=SNUMWIDTH, margin_bottom=2, font_size=18, background_color="#eeeeee", color="#000000"))
+        entry  = toga.TextInput(id=PTIDV, on_change=self.change_ptidaddr, value=adr, style=Pack(text_align=RIGHT, height=45, justify_content="center", width=SNUMWIDTH, margin_bottom=2, font_size=18, background_color="#eeeeee", color="#000000"))
         boxrow = toga.Box(children=[desc, entry, btn], style=Pack(direction=ROW, align_items=END, margin_top=MARGINTOP))
         scan_content.add(boxrow)
 
@@ -828,7 +844,7 @@ class PTApp(toga.App):
         # Render PT base
         btn    = toga.Button(id=BASE, text="Prg", on_press = self.change_ptidbase, style=Pack(width=55, height=55, margin_top=6, background_color="#bbbbbb", color="#000000", font_size=12))
         desc   = toga.Label("Base ID", style=Pack(width=265, align_items=END, font_size=18))
-        entry  = toga.NumberInput(id=BASEV, on_change=self.change_ptidbase, value=addrbase, style=Pack(flex=1, height=45, width=SNUMWIDTH, margin_bottom=2, font_size=18, background_color="#eeeeee", color="#000000"))
+        entry  = toga.NumberInput(id=BASEV, on_change=self.change_ptidbase, value=addrbase, style=Pack(text_align=RIGHT, flex=1, height=45, width=SNUMWIDTH, margin_bottom=2, font_size=18, background_color="#eeeeee", color="#000000"))
         boxrow = toga.Box(children=[desc, entry, btn], style=Pack(direction=ROW, align_items=END, margin_top=MARGINTOP))
         scan_content.add(boxrow)
 
@@ -840,7 +856,7 @@ class PTApp(toga.App):
 
         btn    = toga.Button(id=ADDR, text="Prg", on_press = self.change_locoAddr, style=Pack(width=55, height=55, margin_top=6, background_color="#bbbbbb", color="#000000", font_size=12))
         desc   = toga.Label("Loco Address", style=Pack(width=244, align_items=END, font_size=18))
-        entry  = toga.NumberInput(id=ADDRV, value=locoaddr, min=0, max=9999, style=Pack(justify_content="start", height=48, width=LNUMWIDTH, margin_bottom=2, font_size=18, background_color="#eeeeee", color="#000000"))
+        entry  = toga.NumberInput(id=ADDRV, value=locoaddr, min=0, max=9999, style=Pack(text_align=RIGHT, justify_content="start", height=48, width=LNUMWIDTH, margin_bottom=2, font_size=18, background_color="#eeeeee", color="#000000"))
         boxrow = toga.Box(children=[desc, entry, btn], style=Pack(direction=ROW, align_items=END, margin_top=MARGINTOP))
         scan_content.add(boxrow)
 
@@ -858,41 +874,48 @@ class PTApp(toga.App):
         btn0   = toga.Button(id=COND, text=consist, on_press = self.change_ConsistMode, style=Pack(width=80, height=55, margin_top=6, background_color="#bbbbbb", color="#000000", font_size=14))
         btn1   = toga.Button(id=CONS, text="Prg", on_press = self.change_ConsistAddr, style=Pack(width=55, height=55, margin_top=6, background_color="#bbbbbb", color="#000000", font_size=12))
         desc   = toga.Label("Consist Address", style=Pack(width=164, align_items=END, font_size=18))
-        entry  = toga.NumberInput(id=CONDV, value=consistaddr, min=0, max=9999, style=Pack(flex=1, height=48, width=LNUMWIDTH, font_size=18, background_color="#eeeeee", color="#000000"))
+        entry  = toga.NumberInput(id=CONDV, text_align=RIGHT, value=consistaddr, min=0, max=9999, style=Pack(text_align=RIGHT, flex=1, height=48, width=LNUMWIDTH, font_size=18, background_color="#eeeeee", color="#000000"))
         boxrow = toga.Box(children=[desc, btn0, entry, btn1], style=Pack(direction=ROW, align_items=END, margin_top=MARGINTOP))
         scan_content.add(boxrow)
 
-        # ??
+        # ?? DCC address and passthrough, only latest firmware supports this
+
         
         btn    = toga.Button(id=DECO, text="Prg", on_press = self.change_DCCAddress, style=Pack(width=55, height=55, margin_top=10, background_color="#bbbbbb", color="#000000", font_size=12))
         desc   = toga.Label("DCC Addr", style=Pack(width=160, align_items=END, font_size=18))
         passth = toga.Switch("Fixed", id=DCCM, value=False, on_change=self.change_DCCMode)
-        entry  = toga.NumberInput(id=DCCA, value=3, min=0, max=9999, style=Pack(flex=1, height=48, width=LNUMWIDTH, font_size=18, background_color="#eeeeee", color="#000000"))
+        entry  = toga.NumberInput(id=DCCA, value=3, min=0, max=9999, style=Pack(text_align=RIGHT, flex=1, height=48, width=LNUMWIDTH, font_size=18, background_color="#eeeeee", color="#000000"))
         boxrow = toga.Box(children=[desc, passth, entry, btn], style=Pack(direction=ROW, align_items=END, margin_top=MARGINTOP))
         scan_content.add(boxrow)
 
-        wdog = message[11]   # pull value from received message
+        wdog = chr(message[11])   # pull watchdog value from received message
 
         # WatchDog
         btn    = toga.Button(id=WDOG, text="Prg", on_press = self.change_WatchDog, style=Pack(width=55, height=55, margin_top=6, background_color="#bbbbbb", color="#000000", font_size=12))
         desc   = toga.Label("Watch Dog", style=Pack(width=265, align_items=END, font_size=18))
-        entry  = toga.TextInput(id=WDOGV, value=wdog, style=Pack(height=45, justify_content="center", width=SNUMWIDTH, margin_bottom=2, font_size=18, background_color="#eeeeee", color="#000000"))
+        entry  = toga.TextInput(id=WDOGV, value=wdog, style=Pack(text_align=RIGHT, height=45, justify_content="center", width=SNUMWIDTH, margin_bottom=2, font_size=18, background_color="#eeeeee", color="#000000"))
         boxrow = toga.Box(children=[desc, entry, btn], style=Pack(direction=ROW, align_items=END, margin_top=MARGINTOP))
         scan_content.add(boxrow)
+
+        outxfn = message[35] & 0x7f  # X function code
+        outx   = (message[35] & 0x80) >> 7
 
         # output X
         btn    = toga.Button(id=OUTX, text="Prg", on_press = self.change_OutputX, style=Pack(width=55, height=55, margin_top=6, background_color="#bbbbbb", color="#000000", font_size=12))
         desc   = toga.Label("Output X", style=Pack(width=220, align_items=END, font_size=18))
-        entry0 = toga.TextInput(id=OUTXF, value=wdog, style=Pack(height=45, justify_content="center", width=SNUMWIDTH, margin_bottom=2, font_size=18, background_color="#eeeeee", color="#000000"))
-        entry1 = toga.TextInput(id=OUTXS, value=wdog, style=Pack(height=45, justify_content="center", width=SNUMWIDTH, margin_bottom=2, margin_left=4, font_size=18, background_color="#eeeeee", color="#000000"))
+        entry0 = toga.TextInput(id=OUTXF, value=outxfn, style=Pack(text_align=RIGHT, height=45, width=SNUMWIDTH, margin_bottom=2, font_size=18, background_color="#eeeeee", color="#000000"))
+        entry1 = toga.TextInput(id=OUTXS, value=outx, style=Pack(text_align=RIGHT, height=45, width=SNUMWIDTH, margin_bottom=2, margin_left=4, font_size=18, background_color="#eeeeee", color="#000000"))
         boxrow = toga.Box(children=[desc, entry0, entry1, btn], style=Pack(direction=ROW, align_items=END, margin_top=MARGINTOP))
         scan_content.add(boxrow)
+
+        outyfn = message[36] & 0x7f
+        outy   = (message[36] & 0x80) >> 7
 
         # output Y
         btn    = toga.Button(id=OUTY, text="Prg", on_press = self.change_OutputY, style=Pack(width=55, height=55, margin_top=6, background_color="#bbbbbb", color="#000000", font_size=12))
         desc   = toga.Label("Output Y", style=Pack(width=220, align_items=END, font_size=18))
-        entry0 = toga.TextInput(id=OUTYF, value=wdog, style=Pack(height=45, justify_content="center", width=SNUMWIDTH, margin_bottom=2, font_size=18, background_color="#eeeeee", color="#000000"))
-        entry1 = toga.TextInput(id=OUTYS, value=wdog, style=Pack(height=45, justify_content="center", width=SNUMWIDTH, margin_bottom=2, margin_left=4, font_size=18, background_color="#eeeeee", color="#000000"))
+        entry0 = toga.TextInput(id=OUTYF, value=outyfn, style=Pack(text_align=RIGHT, height=45, width=SNUMWIDTH, margin_bottom=2, font_size=18, background_color="#eeeeee", color="#000000"))
+        entry1 = toga.TextInput(id=OUTYS, value=outy, style=Pack(text_align=RIGHT, height=45, width=SNUMWIDTH, margin_bottom=2, margin_left=4, font_size=18, background_color="#eeeeee", color="#000000"))
         boxrow = toga.Box(children=[desc, entry0, entry1, btn], style=Pack(direction=ROW, align_items=END, margin_top=MARGINTOP))
         scan_content.add(boxrow)
 
@@ -1032,8 +1055,31 @@ class PTApp(toga.App):
     def callMainWidgetWindow(self, widget):
         self.displayMainWidgetScreen(widget, self.message)
 
-    def callServoScreen(self, widget):
-        self.displayServoScreen(self.buttonSave, self.message)
+    async def callServoScreen(self, widget):
+
+        retries = 0
+
+        while retries < 2:
+           data = chr(GETPHYSICS) + "000000000000000000"
+           buff = self.Xbee.buildXbeeTransmitData(self.Xbee.buildAddress(self.macAddress), data)
+
+           self.writebuff = bytearray(buff)
+           self.writelen = len(self.writebuff)
+ 
+           await self.connectWrite()
+           await asyncio.sleep(1)
+           await self.connectRead()
+
+           self.pysmessage = await self.parseReturnData(len(self.readbuff), self.readbuff, 80)
+
+           if self.pysmessage != []:
+              self.displayServoScreen(self.buttonSave, self.message, self.pysmessage)
+              return
+           else:
+              retries = retries + 1
+
+        return
+
 
     def callPhysicsScreen(self, widget):
         self.displayPhysicsScreen(self.buttonSave, self.message)
@@ -1045,7 +1091,9 @@ class PTApp(toga.App):
     #####################################################################
 
     # Servo Configure Screen
-    def displayServoScreen(self, button, message):
+    def displayServoScreen(self, button, message, pymessage):
+
+        print ("pymessage", pymessage)
 
         MARGINTOP = 2
         LNUMWIDTH = 64
@@ -1098,7 +1146,7 @@ class PTApp(toga.App):
         svlo0 = svlo0 | ch
 
         desc   = toga.Label("     Low Limit", style=Pack(width=244, align_items=END, font_size=12))
-        entry0 = toga.NumberInput(id=SV0LV, on_change=self.handleServo0, min=0, max=1000, value=svlo0, style=Pack(flex=1, height=48, width=LNUMWIDTH, font_size=18, background_color="#eeeeee", color="#000000"))
+        entry0 = toga.NumberInput(id=SV0LV, on_change=self.handleServo0, min=0, max=1000, value=svlo0, style=Pack(text_align=RIGHT, flex=1, height=48, width=LNUMWIDTH, font_size=18, background_color="#eeeeee", color="#000000"))
         btn    = toga.Button(id=SV0LP, text="Prg", on_press = self.handleServo0, style=Pack(width=55, height=55, margin_top=6, background_color="#bbbbbb", color="#000000", font_size=12))
         boxrow = toga.Box(children=[desc, entry0, btn], style=Pack(direction=ROW, align_items=END, margin_top=1))
         scan_content.add(boxrow)
@@ -1114,7 +1162,7 @@ class PTApp(toga.App):
 
         btn    = toga.Button(id=SV0HP, text="Prg", on_press = self.sendPrgCommand, style=Pack(width=55, height=55, margin_top=6, background_color="#bbbbbb", color="#000000", font_size=12))
         desc   = toga.Label("     High Limit", style=Pack(width=244, align_items=END, font_size=12))
-        entry1 = toga.NumberInput(id='SV0HV', on_change=self.handleServo0, min=0, max=9999, value=svhi0, style=Pack(flex=1, height=48, width=LNUMWIDTH, font_size=18, background_color="#eeeeee", color="#000000"))
+        entry1 = toga.NumberInput(id='SV0HV', on_change=self.handleServo0, min=0, max=9999, value=svhi0, style=Pack(text_align=RIGHT, flex=1, height=48, width=LNUMWIDTH, font_size=18, background_color="#eeeeee", color="#000000"))
         boxrow = toga.Box(children=[desc, entry1, btn], style=Pack(direction=ROW, align_items=END, margin_top=1))
         scan_content.add(boxrow)
 
@@ -1142,7 +1190,7 @@ class PTApp(toga.App):
 
         btn    = toga.Button(id=SV1FCP, text="Prg", on_press = self.handleServo1, style=Pack(width=55, height=55, margin_top=6, background_color="#bbbbbb", color="#000000", font_size=12))
         desc   = toga.Label("     Function Code", style=Pack(width=260, align_items=END, font_size=12))
-        func   = toga.NumberInput(id=SV1FC, value=sv1func, on_change=self.handleServo1, min=0, max=99, style=Pack(flex=1, height=48, width=48, font_size=18, background_color="#eeeeee", color="#000000"))
+        func   = toga.NumberInput(id=SV1FC, value=sv1func, on_change=self.handleServo1, min=0, max=99, style=Pack(text_align=RIGHT, flex=1, height=48, width=48, font_size=18, background_color="#eeeeee", color="#000000"))
         boxrow = toga.Box(children=[desc, func, btn], style=Pack(direction=ROW, align_items=END, margin_top=1))
         scan_content.add(boxrow)
 
@@ -1151,7 +1199,7 @@ class PTApp(toga.App):
         svlo1 = svlo1 | ch
 
         desc   = toga.Label("     Low Limit", style=Pack(width=244, align_items=END, font_size=12))
-        entry0 = toga.NumberInput(id=SV1LV, value=svlo1, on_change=self.handleServo1, min=0, max=1000, style=Pack(flex=1, height=48, width=LNUMWIDTH, font_size=18, background_color="#eeeeee", color="#000000"))
+        entry0 = toga.NumberInput(id=SV1LV, value=svlo1, on_change=self.handleServo1, min=0, max=1000, style=Pack(text_align=RIGHT, flex=1, height=48, width=LNUMWIDTH, font_size=18, background_color="#eeeeee", color="#000000"))
         btn    = toga.Button(id=SV1LP, text="Prg", on_press = self.handleServo1, style=Pack(width=55, height=55, margin_top=6, background_color="#bbbbbb", color="#000000", font_size=12))
         boxrow = toga.Box(children=[desc, entry0, btn], style=Pack(direction=ROW, align_items=END, margin_top=1))
         scan_content.add(boxrow)
@@ -1167,7 +1215,7 @@ class PTApp(toga.App):
 
         btn    = toga.Button(id=SV1HP, text="Prg", on_press = self.handleServo1, style=Pack(width=55, height=55, margin_top=6, background_color="#bbbbbb", color="#000000", font_size=12))
         desc   = toga.Label("     High Limit", style=Pack(width=244, align_items=END, font_size=12))
-        entry1  = toga.NumberInput(id=SV1HV, value=svhi1, on_change=self.handleServo1, min=0, max=9999, style=Pack(flex=1, height=48, width=LNUMWIDTH, font_size=18, background_color="#eeeeee", color="#000000"))
+        entry1  = toga.NumberInput(id=SV1HV, value=svhi1, on_change=self.handleServo1, min=0, max=9999, style=Pack(text_align=RIGHT, flex=1, height=48, width=LNUMWIDTH, font_size=18, background_color="#eeeeee", color="#000000"))
         boxrow = toga.Box(children=[desc, entry1, btn], style=Pack(direction=ROW, align_items=END, margin_top=1))
         scan_content.add(boxrow)
 
@@ -1195,7 +1243,7 @@ class PTApp(toga.App):
 
         btn    = toga.Button(id=SV2FCP, text="Prg", on_press = self.handleServo2, style=Pack(width=55, height=55, margin_top=6, background_color="#bbbbbb", color="#000000", font_size=12))
         desc   = toga.Label("     Function Code", style=Pack(width=260, align_items=END, font_size=12))
-        func   = toga.NumberInput(id=SV2FC, value=sv2func, on_change=self.handleServo2, min=0, max=99, style=Pack(flex=1, height=48, width=48, font_size=18, background_color="#eeeeee", color="#000000"))
+        func   = toga.NumberInput(id=SV2FC, value=sv2func, on_change=self.handleServo2, min=0, max=99, style=Pack(text_align=RIGHT, flex=1, height=48, width=48, font_size=18, background_color="#eeeeee", color="#000000"))
         boxrow = toga.Box(children=[desc, func, btn], style=Pack(direction=ROW, align_items=END, margin_top=1))
         scan_content.add(boxrow)
 
@@ -1204,7 +1252,7 @@ class PTApp(toga.App):
         svlo2 = svlo2 | ch
 
         desc   = toga.Label("     Low Limit", style=Pack(width=244, align_items=END, font_size=12))
-        entry0 = toga.NumberInput(id=SV2LV, value=svlo2, on_change=self.handleServo2, min=0, max=1000, style=Pack(flex=1, height=48, width=LNUMWIDTH, font_size=18, background_color="#eeeeee", color="#000000"))
+        entry0 = toga.NumberInput(id=SV2LV, value=svlo2, on_change=self.handleServo2, min=0, max=1000, style=Pack(text_align=RIGHT, flex=1, height=48, width=LNUMWIDTH, font_size=18, background_color="#eeeeee", color="#000000"))
         btn    = toga.Button(id=SV2LP, text="Prg", on_press = self.handleServo2, style=Pack(width=55, height=55, margin_top=6, background_color="#bbbbbb", color="#000000", font_size=12))
         boxrow = toga.Box(children=[desc, entry0, btn], style=Pack(direction=ROW, align_items=END, margin_top=1))
         scan_content.add(boxrow)
@@ -1220,7 +1268,7 @@ class PTApp(toga.App):
 
         btn    = toga.Button(id=SV2HP, text="Prg", on_press = self.handleServo2, style=Pack(width=55, height=55, margin_top=6, background_color="#bbbbbb", color="#000000", font_size=12))
         desc   = toga.Label("     High Limit", style=Pack(width=244, align_items=END, font_size=12))
-        entry1  = toga.NumberInput(id=SV2HV, value=svhi2, on_change=self.handleServo2, min=0, max=9999, style=Pack(flex=1, height=48, width=LNUMWIDTH, font_size=18, background_color="#eeeeee", color="#000000"))
+        entry1  = toga.NumberInput(id=SV2HV, value=svhi2, on_change=self.handleServo2, min=0, max=9999, style=Pack(text_align=RIGHT, flex=1, height=48, width=LNUMWIDTH, font_size=18, background_color="#eeeeee", color="#000000"))
         boxrow = toga.Box(children=[desc, entry1, btn], style=Pack(direction=ROW, align_items=END, margin_top=1))
         scan_content.add(boxrow)
 
@@ -1237,34 +1285,43 @@ class PTApp(toga.App):
         #### Must get physics data here ######################
         ##
 
-        #br0 = self.physicsFrame[10]
-        #br1 = self.physicsFrame[11]
-        #brakerate = (br1<<8) | br0
-
-        # Brake Rate
-        brate = message[11]
+        br0 = pymessage[10]    # Brake rate
+        br1 = pymessage[11]
+        brate = (br1<<8) | br0
 
         btn    = toga.Button(id=BRAT, text="Prg", on_press = self.sendPrgCommand, style=Pack(width=55, height=55, margin_top=6, background_color="#bbbbbb", color="#000000", font_size=12))
-        desc   = toga.Label("Brake Rate", style=Pack(width=262, align_items=END, font_size=18))
-        func   = toga.NumberInput(id=BRATV, on_change=self.setNothing, min=0, max=99, style=Pack(flex=1, height=48, width=48, font_size=12, background_color="#eeeeee", color="#000000"))
+        desc   = toga.Label("Brake Rate", style=Pack(width=260, align_items=END, font_size=16))
+        func   = toga.NumberInput(id=BRATV, value=brate, min=0, max=99, style=Pack(text_align=RIGHT, flex=1, height=48, width=64, font_size=18, background_color="#eeeeee", color="#000000"))
         boxrow = toga.Box(children=[desc, func, btn], style=Pack(direction=ROW, align_items=END, margin_top=1))
         scan_content.add(boxrow)
+
+        fncode = pymessage[16]
 
         btn    = toga.Button(id=BFNC, text="Prg", on_press = self.sendPrgCommand, style=Pack(width=55, height=55, margin_top=6, background_color="#bbbbbb", color="#000000", font_size=12))
-        desc   = toga.Label("Brake Rate FnCode", style=Pack(width=262, align_items=END, font_size=18))
-        func   = toga.NumberInput(id=BFNCV, on_change=self.setNothing, min=0, max=99, style=Pack(flex=1, height=48, width=48, font_size=12, background_color="#eeeeee", color="#000000"))
+        desc   = toga.Label("Brake Rate FnCode", style=Pack(width=260, align_items=END, font_size=16))
+        func   = toga.NumberInput(id=BFNCV, value=fncode, min=0, max=99, style=Pack(text_align=RIGHT, flex=1, height=48, width=64, font_size=18, background_color="#eeeeee", color="#000000"))
         boxrow = toga.Box(children=[desc, func, btn], style=Pack(direction=ROW, align_items=END, margin_top=1))
         scan_content.add(boxrow)
+
+        ################################################# Acceleration Value
+        ac0 = pymessage[12]
+        ac1 = pymessage[13]
+        acceleration = (ac1<<8) | ac0
 
         btn    = toga.Button(id=ACCL, text="Prg", on_press = self.sendPrgCommand, style=Pack(width=55, height=55, margin_top=6, background_color="#bbbbbb", color="#000000", font_size=12))
-        desc   = toga.Label("Acceleration", style=Pack(width=262, align_items=END, font_size=18))
-        func   = toga.NumberInput(id=ACCLV, on_change=self.setNothing, min=0, max=99, style=Pack(flex=1, height=48, width=48, font_size=12, background_color="#eeeeee", color="#000000"))
+        desc   = toga.Label("Acceleration", style=Pack(width=260, align_items=END, font_size=16))
+        func   = toga.NumberInput(id=ACCLV, value=acceleration, min=0, max=99, style=Pack(text_align=RIGHT, flex=1, height=48, width=64, font_size=18, background_color="#eeeeee", color="#000000"))
         boxrow = toga.Box(children=[desc, func, btn], style=Pack(direction=ROW, align_items=END, margin_top=1))
         scan_content.add(boxrow)
 
+        ################################################# Deceleration Value
+        dc0 = pymessage[14]
+        dc1 = pymessage[15]
+        deceleration = (dc1<<8) | dc0
+
         btn    = toga.Button(id=DECL, text="Prg", on_press = self.sendPrgCommand, style=Pack(width=55, height=55, margin_top=6, background_color="#bbbbbb", color="#000000", font_size=12))
-        desc   = toga.Label("Deceleration", style=Pack(width=262, align_items=END, font_size=18))
-        func   = toga.NumberInput(id=DECLV, on_change=self.setNothing, min=0, max=99, style=Pack(flex=1, height=48, width=48, font_size=12, background_color="#eeeeee", color="#000000"))
+        desc   = toga.Label("Deceleration", style=Pack(width=260, align_items=END, font_size=16))
+        func   = toga.NumberInput(id=DECLV, value=deceleration, min=0, max=99, style=Pack(text_align=RIGHT, flex=1, height=48, width=64, font_size=18, background_color="#eeeeee", color="#000000"))
         boxrow = toga.Box(children=[desc, func, btn], style=Pack(direction=ROW, align_items=END, margin_top=1))
         scan_content.add(boxrow)
 
