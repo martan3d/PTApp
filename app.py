@@ -6,7 +6,7 @@ import toga
 import asyncio
 from toga.style import Pack
 from toga import Button, MultilineTextInput, Label, TextInput
-from toga.style.pack import COLUMN, ROW, CENTER, RIGHT, LEFT, START, END
+from toga.style.pack import COLUMN, ROW, CENTER, RIGHT, LEFT, START, END, HIDDEN, VISIBLE
 
 from .xbee import *
 
@@ -226,6 +226,15 @@ class PTApp(toga.App):
         scan_content = toga.Box(style=Pack(direction=COLUMN, align_items=CENTER, margin_top=5))
         scan_content.add(self.discover_button)
         scan_content.add(self.working_text)
+
+        throttle = Button(
+            'Throttle',
+            on_press=self.callThrottleScreen,
+            style=Pack(width=120, height=60, margin_top=10, background_color="#cccccc", color="#000000", font_size=12)
+        )
+
+        boxrow = toga.Box(children=[throttle], style=Pack(direction=ROW, align_items=CENTER, margin_top=20))
+        scan_content.add(boxrow)
 
         self.scroller = toga.ScrollContainer(content=scan_content, style=Pack(direction=COLUMN, align_items=CENTER))
         self.main_window.content = self.scroller
@@ -582,7 +591,7 @@ class PTApp(toga.App):
         LNUMWIDTH = 64
         SNUMWIDTH = 42
 
-        scan_content = toga.Box(style=Pack(direction=COLUMN, margin=30))
+        scan_content = toga.Box(style=Pack(direction=COLUMN, margin_left=6))
 
         # Ascii ID and Mac at top of display
         idlabel  = toga.Label(self.buttonDict[self.macAddress], style=Pack(flex=1, color="#000000", align_items=CENTER, font_size=32))
@@ -841,7 +850,7 @@ class PTApp(toga.App):
 
 
     def editSlot(self, id):
-        scan_content = toga.Box(style=Pack(direction=COLUMN, margin=30))
+        scan_content = toga.Box(style=Pack(direction=COLUMN, margin_left=6))
 
 ##
 ###  Main Receiver Configure Screen
@@ -852,7 +861,7 @@ class PTApp(toga.App):
         LNUMWIDTH = 64
         SNUMWIDTH = 42
 
-        scan_content = toga.Box(style=Pack(direction=COLUMN, margin=30))
+        scan_content = toga.Box(style=Pack(direction=COLUMN, margin_left=6))
 
         # Ascii ID and Mac at top of display
         idlabel  = toga.Label(self.buttonDict[button.id], style=Pack(flex=1, color="#000000", align_items=CENTER, font_size=32))
@@ -1087,7 +1096,7 @@ class PTApp(toga.App):
         pass
 
     def callThrottleScreen(self, widget):
-        pass
+        self.protothrottleSimulation()
 
     def callMainWidgetWindow(self, widget):
         self.displayMainWidgetScreen(widget, self.message)
@@ -1137,7 +1146,7 @@ class PTApp(toga.App):
         LNUMWIDTH = 64
         SNUMWIDTH = 42
 
-        scan_content = toga.Box(style=Pack(direction=COLUMN, margin=30))
+        scan_content = toga.Box(style=Pack(direction=COLUMN, margin_left=6))
 
         # Ascii ID and Mac at top of display
         idlabel  = toga.Label(self.buttonDict[button.id], style=Pack(flex=1, color="#000000", align_items=CENTER, font_size=32))
@@ -1470,7 +1479,7 @@ class PTApp(toga.App):
         LNUMWIDTH = 64
         SNUMWIDTH = 42
 
-        scan_content = toga.Box(style=Pack(direction=COLUMN, margin=30))
+        scan_content = toga.Box(style=Pack(direction=COLUMN, margin_left=6))
 
         # Ascii ID and Mac at top of display
         idlabel  = toga.Label(self.buttonDict[button.id], style=Pack(flex=1, color="#000000", align_items=CENTER, font_size=32))
@@ -1589,9 +1598,99 @@ class PTApp(toga.App):
 ##
 
     def protothrottleSimulation(self):
+
+        MARGINTOP = 20
+        LNUMWIDTH = 64
+        SNUMWIDTH = 42
+
+        scan_content = toga.Box(style=Pack(direction=COLUMN, margin_left=6))
+
+        blank  = toga.Label("   ", style=Pack(margin=10))
+
+        self.locoAddr = '0000'
+
+        self.loco = toga.NumberInput(value=self.locoAddr, style=Pack(width=120, text_align="center", background_color="#ffffff", font_size=32, margin=2))
+        box  = toga.Box(children=[self.loco], style=Pack(direction=ROW, background_color="#000000", margin_left=140, margin_top=30))
+        scan_content.add(box)
+
+        boxrow = toga.Box(children=[blank, toga.Divider(), blank], style=Pack(direction=COLUMN, margin_top=20, margin_bottom=20))
+        scan_content.add(boxrow)
+
+        notches = toga.Label("8      7      6      5      4      3      2      1      Idle", style=Pack(text_align="justify", width=360, font_size=12, margin_left=28))
+        boxrow = toga.Box(children=[notches], style=Pack(direction=ROW, align_items=CENTER, margin_left=10))
+        scan_content.add(boxrow)
+
+        adj0   = toga.Slider(value=8, min=0, max=8, tick_count=8, on_change=self.handleThrottle, style=Pack(width=360, height=50))
+        boxrow = toga.Box(children=[adj0], style=Pack(direction=ROW, align_items=CENTER, margin_left=10))
+        scan_content.add(boxrow)
+
+        aux  = toga.Button(id="AUX", text="AUX", on_press = self.handleAux, style=Pack(width=75, height=55, margin_top=2, margin_right=5, background_color="#bbbbbb", color="#000000", font_size=12))
+        bln  = toga.Label(" ", style=Pack(width=140, margin_left=20))
+        horn = toga.Button(id="HORN", text="HORN", on_press=self.handleHorn, style=Pack(width=75, height=55, margin_top=2, margin_right=5, background_color="#bbbbbb", color="#000000", font_size=12))
+        boxrow = toga.Box(children=[aux, bln, horn], style=Pack(direction=ROW, margin_top=4, margin_left=30))
+        scan_content.add(boxrow)
+
+        reverser = toga.Label("Rev          N           Fwd", style=Pack(text_align="justify", width=260, font_size=12, margin_left=68, margin_top=20))
+        boxrow = toga.Box(children=[reverser], style=Pack(direction=ROW, align_items=CENTER, margin_left=100))
+        scan_content.add(boxrow)
+
+        bell    = toga.Button(id="BELL", text="BELL", on_press = self.handleBell, style=Pack(width=75, height=55, margin_top=6, margin_right=10, background_color="#bbbbbb", color="#000000", font_size=12))
+        reverse = toga.Slider(value=8, min=0, max=8, tick_count=3, on_change=self.handleReverse, style=Pack(width=180, height=50, margin_left=40))
+        boxrow  = toga.Box(children=[bell, reverse], style=Pack(direction=ROW, align_items=CENTER, margin_top=2, margin_left=30))
+        scan_content.add(boxrow)
+
+        braker = toga.Label("Brake", style=Pack(text_align="justify", width=160, font_size=12))
+        boxrow = toga.Box(children=[braker], style=Pack(direction=ROW, align_items=CENTER, margin_left=100, margin_top=20))
+        scan_content.add(boxrow)
+
+        brake = toga.Slider(value=0, min=0, max=16, on_change=self.handleBrakeLever, style=Pack(width=220, height=50))
+        boxrow = toga.Box(children=[brake], style=Pack(direction=ROW, align_items=CENTER, margin_left=20))
+        scan_content.add(boxrow)
+
+        self.number_input = toga.NumberInput(style=Pack(padding=10))
+        self.number_input.style.visibility = HIDDEN
+        scan_content.add(self.number_input)
+
+        self.scan = Button(
+            'Scan',
+            on_press=self.displayMainWindow,
+            style=Pack(width=120, height=60, margin_top=6, background_color="#cccccc", color="#000000", font_size=12)
+        )
+
+        boxrow = toga.Box(children=[self.scan], style=Pack(direction=ROW, align_items=CENTER, margin_top=100, margin_left=140))
+        scan_content.add(boxrow)
+
+        self.scroller = toga.ScrollContainer(content=scan_content, style=Pack(direction=COLUMN, align_items=CENTER, background_color="#eeeeee"))
+        self.main_window.content = self.scroller
+        self.main_window.show()
+
+    def confirmInput(self, widget):
+        self.number_input.focus()
         pass
 
+    def handleThrottle(self, widget):
+        self.number_input.focus()
+        pass
 
+    def handleReverse(self, widget):
+        self.number_input.focus()
+        pass
+
+    def handleBrakeLever(self, widget):
+        self.number_input.focus()
+        pass
+
+    def handleAux(self, widget):
+        self.number_input.focus()
+        pass
+
+    def handleHorn(self, widget):
+        self.number_input.focus()
+        pass
+
+    def handleBell(self, widget):
+        self.number_input.focus()
+        pass
 
 
 
