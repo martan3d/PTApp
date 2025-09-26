@@ -147,6 +147,8 @@ NTPRG6 = 'NTPRG6'
 NTPRG7 = 'NTPRG7'
 NTPRG8 = 'NTPRG8'
 
+XBEA   = 'XBEA'
+
 
 # MESSAGE IDS for Receiver message side
 GETPHYSICS           = 53
@@ -874,9 +876,10 @@ class PTApp(toga.App):
         scan_content = toga.Box(style=Pack(direction=COLUMN, margin_left=6))
 
         # Ascii ID and Mac at top of display
-        idlabel  = toga.Label(self.buttonDict[button.id], style=Pack(flex=1, color="#000000", align_items=CENTER, font_size=32))
+        btn      = toga.Button(text="Prg", on_press=self.change_xbeeAddr, style=Pack(width=55, height=55, margin_top=6, background_color="#bbbbbb", color="#000000", font_size=12))
+        idlabel  = toga.TextInput(id=XBEA, value=self.buttonDict[button.id], style=Pack(flex=1, color="#000000", align_items=CENTER, font_size=32))
         maclabel = toga.Label(button.id, style=Pack(flex=1, color="#000000", align_items=CENTER, font_size=12))
-        boxrowA  = toga.Box(children=[idlabel], style=Pack(direction=ROW, align_items=END, margin_top=4))
+        boxrowA  = toga.Box(children=[idlabel, btn], style=Pack(direction=ROW, align_items=END, margin_top=4))
         boxrowB  = toga.Box(children=[maclabel], style=Pack(direction=ROW, align_items=END, margin_top=2))
 
         scan_content.add(boxrowA)
@@ -1015,6 +1018,23 @@ class PTApp(toga.App):
     #### Support routines for screen above
     ##
 
+    async def change_xbeeAddr(self, widget):
+        nodeid = str(self.app.widgets[XBEA].value)
+        data = self.Xbee.xbeeTransmitRemoteCommand(self.Xbee.buildAddress(self.macAddress), 'N', 'I', nodeid)    # set node id
+        self.writebuff = bytearray(data)
+        self.writelen = len(self.writebuff)
+        await self.connectWrite()
+
+        data = self.Xbee.xbeeTransmitRemoteCommand(self.Xbee.buildAddress(self.macAddress), 'A', 'C', '')        # apply changes
+        self.writebuff = bytearray(data)
+        self.writelen = len(self.writebuff)
+        await self.connectWrite()
+
+        data = self.Xbee.xbeeTransmitRemoteCommand(self.Xbee.buildAddress(self.macAddress), 'W', 'R', '')        # write to eeprom
+        self.writebuff = bytearray(data)
+        self.writelen = len(self.writebuff)
+        await self.connectWrite()
+
     async def change_ptidaddr(self, widget):
         ptidaddr = str(self.app.widgets[PTIDV].value)
         data = chr(SETPROTOADDRESS) + ptiaddr + '234567890123456789'
@@ -1080,15 +1100,15 @@ class PTApp(toga.App):
         await self.sendDataBuffer(data)
 
     async def change_OutputX(self, widget):
-        outFunc  = str(self.app.widgets[OUTXF].value)
-        outValue = str(self.app.widgets[OUTXS].value)
-        data = chr(SETOUTPUTSMODE) + chr(0) + chr(outFunc) + chr(outValue) + '5678901201234567'
+        outFunc  = int(self.app.widgets[OUTXF].value)
+        outValue = int(self.app.widgets[OUTXS].value)
+        data = chr(SETOUTPUTSMODE) + chr(1) + chr(outFunc) + chr(outValue) + '5678901201234567'
         await self.sendDataBuffer(data)
 
     async def change_OutputY(self, widget):
-        outFunc  = str(self.app.widgets[OUTYF].value)
-        outValue = str(self.app.widgets[OUTYS].value)
-        data = chr(SETOUTPUTSMODE) + chr(1) + chr(outFunc) + chr(outValue) + '5678901201234567'
+        outFunc  = int(self.app.widgets[OUTYF].value)
+        outValue = int(self.app.widgets[OUTYS].value)
+        data = chr(SETOUTPUTSMODE) + chr(0) + chr(outFunc) + chr(outValue) + '5678901201234567'
         await self.sendDataBuffer(data)
 
 
