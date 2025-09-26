@@ -416,6 +416,8 @@ class PTApp(toga.App):
 
     async def queryProtothrottle(self):
 
+        slotindex = 128
+
         lad = slotindex & 0x00ff
         had = (slotindex & 0xff00) >> 8
 
@@ -427,7 +429,9 @@ class PTApp(toga.App):
         await asyncio.sleep(.1)
         await self.connectRead()
 
-        if self.readbuff == []:
+        print ("look for PT, check return data ")
+
+        if self.readbuff[0] == 0:
            return []
 
         self.working_text.text = "Retrieve Slot Data from Protothrottle"
@@ -852,6 +856,12 @@ class PTApp(toga.App):
     def editSlot(self, id):
         scan_content = toga.Box(style=Pack(direction=COLUMN, margin_left=6))
 
+    def handle_focus(self, widget):
+        native_view = widget._impl
+        # Set the background to null to remove the default line.
+        native_view.set_background(None)
+
+
 ##
 ###  Main Receiver Configure Screen
 ##
@@ -890,7 +900,7 @@ class PTApp(toga.App):
         # Render PT base
         btn    = toga.Button(id=BASE, text="Prg", on_press = self.change_ptidbase, style=Pack(width=55, height=55, margin_top=6, background_color="#bbbbbb", color="#000000", font_size=12))
         desc   = toga.Label("Base ID", style=Pack(width=265, align_items=END, font_size=18))
-        entry  = toga.NumberInput(id=BASEV, on_change=self.change_ptidbase, value=addrbase, style=Pack(text_align=RIGHT, flex=1, height=45, width=SNUMWIDTH, margin_bottom=2, font_size=18, background_color="#eeeeee", color="#000000"))
+        entry  = toga.NumberInput(id=BASEV, value=addrbase, style=Pack(text_align=RIGHT, flex=1, height=45, width=SNUMWIDTH, margin_bottom=2, font_size=18, background_color="#eeeeee", color="#000000"))
         boxrow = toga.Box(children=[desc, entry, btn], style=Pack(direction=ROW, align_items=END, margin_top=MARGINTOP))
         scan_content.add(boxrow)
 
@@ -1012,7 +1022,8 @@ class PTApp(toga.App):
 
     async def change_ptidbase(self, widget):
         ptidbase = str(self.app.widgets[BASEV].value)
-        data = chr(SETBASEADDRESS) + ptidbase + '234567890123456789'
+        p = int(ptidbase)
+        data = chr(SETBASEADDRESS) + chr(p) + '34567890123456789'
         await self.sendDataBuffer(data)
 
     async def change_locoAddr(self, widget):
@@ -1644,10 +1655,21 @@ class PTApp(toga.App):
         scan_content.add(boxrow)
 
         brake = toga.Slider(value=0, min=0, max=16, on_change=self.handleBrakeLever, style=Pack(width=220, height=50))
-        boxrow = toga.Box(children=[brake], style=Pack(direction=ROW, align_items=CENTER, margin_left=20))
+        brfnc  = toga.NumberInput(id="BRFNC", value=11, on_change=self.setBrakeFuncCode, style=Pack(margin_left=20, width=48, height=48, font_size=18))
+        boxrow = toga.Box(children=[brake, brfnc], style=Pack(direction=ROW, align_items=CENTER, margin_left=20))
         scan_content.add(boxrow)
 
-        self.number_input = toga.NumberInput(style=Pack(padding=10))
+        Afnc  = toga.Button(id="A", text="A", on_press=self.handleAfunc, style=Pack(width=35, height=55, margin_top=2, margin_right=5, background_color="#bbbbbb", color="#000000", font_size=12))
+        Acode = toga.NumberInput(id="Acode", value=11, on_change=self.setACode, style=Pack(margin_left=20, width=48, height=48, font_size=18))
+        bln   = toga.Label(" ", style=Pack(width=140, margin_left=20))
+        Bfnc  = toga.Button(id="B", text="B", on_press=self.handleBfunc, style=Pack(width=35, height=55, margin_top=2, margin_right=5, background_color="#bbbbbb", color="#000000", font_size=12))
+        Bcode = toga.NumberInput(id="Bcode", value=11, on_change=self.setBCode, style=Pack(margin_left=20, width=48, height=48, font_size=18))
+
+        boxrow = toga.Box(children=[Afnc, bln, Bfnc], style=Pack(direction=ROW, margin_top=4, margin_left=30))
+        scan_content.add(boxrow)
+
+
+        self.number_input = toga.NumberInput(style=Pack(padding=10))   # dummy input to undo focus of loco number input
         self.number_input.style.visibility = HIDDEN
         scan_content.add(self.number_input)
 
@@ -1657,12 +1679,29 @@ class PTApp(toga.App):
             style=Pack(width=120, height=60, margin_top=6, background_color="#cccccc", color="#000000", font_size=12)
         )
 
-        boxrow = toga.Box(children=[self.scan], style=Pack(direction=ROW, align_items=CENTER, margin_top=100, margin_left=140))
+        boxrow = toga.Box(children=[self.scan], style=Pack(direction=ROW, align_items=CENTER, margin_top=10, margin_left=140))
         scan_content.add(boxrow)
 
         self.scroller = toga.ScrollContainer(content=scan_content, style=Pack(direction=COLUMN, align_items=CENTER, background_color="#eeeeee"))
         self.main_window.content = self.scroller
         self.main_window.show()
+
+
+
+    def handleAfunc(self, widget):
+        pass
+
+    def handleBfunc(self, widget):
+        pass
+
+    def setACode(self, widget):
+        pass
+
+    def setBCode(self, widget):
+        pass
+
+    def setBrakeFuncCode(self, widget):
+        pass
 
     def confirmInput(self, widget):
         self.number_input.focus()
