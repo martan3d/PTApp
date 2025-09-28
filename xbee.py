@@ -187,3 +187,54 @@ class xbeeController:
         return frame
 
 
+##############################################################################
+
+    def xbeeTransmitRemoteCommand(self, dest, cmda, cmdb, data):
+        txdata = []
+        data = data[:20].strip()
+        for d in data:     # make sure it's in valid bytes for transmit
+            txdata.append(int(ord(d)))
+
+        cmda = ord(cmda)
+        cmdb = ord(cmdb)
+
+        frame = []
+        frame.append(0x7e)      # header
+
+        frame.append(0)         # our data is always fixed size, 20 bytes of payload
+
+        length = 15 + len(data)
+
+        frame.append(length)    # this is all data except header, length and checksum
+        frame.append(0x17)      # REMOTE AT COMMAND
+        frame.append(0x01)      # frame ID for ack- 0 = disable
+
+        frame.append(dest[0])   # 64 bit address (mac)
+        frame.append(dest[1])
+        frame.append(dest[2])
+        frame.append(dest[3])
+        frame.append(dest[4])
+        frame.append(dest[5])
+        frame.append(dest[6])
+        frame.append(dest[7])
+
+        frame.append(0xff)      # always reserved
+        frame.append(0xfe)
+
+        frame.append(0x02)      # always apply changes immediate
+
+        frame.append(cmda)      # remote command
+        frame.append(cmdb)
+
+        for i in txdata:        # move data to transmit buffer
+            frame.append(i)
+        frame.append(0)         # checksum position
+
+        cks = 0;
+        for i in range(3,length+3):   # compute checksum
+           cks += frame[i]
+
+        i = (255-cks) & 0x00ff
+        frame[length+3] = i
+
+        return frame

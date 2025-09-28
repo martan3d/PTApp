@@ -147,6 +147,8 @@ NTPRG6 = 'NTPRG6'
 NTPRG7 = 'NTPRG7'
 NTPRG8 = 'NTPRG8'
 
+XBEA   = 'XBEA'
+
 
 # MESSAGE IDS for Receiver message side
 GETPHYSICS           = 53
@@ -184,25 +186,6 @@ class PTApp(toga.App):
 
     def startup(self):
 
-        self.servohandlers  = { SV0LV  : self.handleServo0,
-                                SV0HV  : self.handleServo0,
-                                SV0R   : self.handleServo0,
-                                SV0LVS : self.handleServo0,
-                                SV0HVS : self.handleServo0,
-                                SV1LV  : self.handleServo1,
-                                SV1HV  : self.handleServo1,
-                                SV1FC  : self.handleServo1,
-                                SV1R   : self.handleServo1,
-                                SV1LVS : self.handleServo1,
-                                SV1HVS : self.handleServo1,
-                                SV2LV  : self.handleServo2,
-                                SV2HV  : self.handleServo2,
-                                SV2FC  : self.handleServo2,
-                                SV2R   : self.handleServo2,
-                                SV2LVS : self.handleServo2,
-                                SV2HVS : self.handleServo2
-                              }
-                               
         self.Xbee = xbeeController()
         self.main_window = toga.MainWindow(title=self.formal_name)
         self.setupAndroidSerialPort()
@@ -874,9 +857,10 @@ class PTApp(toga.App):
         scan_content = toga.Box(style=Pack(direction=COLUMN, margin_left=6))
 
         # Ascii ID and Mac at top of display
-        idlabel  = toga.Label(self.buttonDict[button.id], style=Pack(flex=1, color="#000000", align_items=CENTER, font_size=32))
+        btn      = toga.Button(text="Prg", on_press=self.change_xbeeAddr, style=Pack(width=55, height=55, margin_top=6, background_color="#bbbbbb", color="#000000", font_size=12))
+        idlabel  = toga.TextInput(id=XBEA, value=self.buttonDict[button.id], style=Pack(flex=1, color="#000000", align_items=CENTER, font_size=32))
         maclabel = toga.Label(button.id, style=Pack(flex=1, color="#000000", align_items=CENTER, font_size=12))
-        boxrowA  = toga.Box(children=[idlabel], style=Pack(direction=ROW, align_items=END, margin_top=4))
+        boxrowA  = toga.Box(children=[idlabel, btn], style=Pack(direction=ROW, align_items=END, margin_top=4))
         boxrowB  = toga.Box(children=[maclabel], style=Pack(direction=ROW, align_items=END, margin_top=2))
 
         scan_content.add(boxrowA)
@@ -1015,6 +999,23 @@ class PTApp(toga.App):
     #### Support routines for screen above
     ##
 
+    async def change_xbeeAddr(self, widget):
+        nodeid = str(self.app.widgets[XBEA].value)
+        data = self.Xbee.xbeeTransmitRemoteCommand(self.Xbee.buildAddress(self.macAddress), 'N', 'I', nodeid)    # set node id
+        self.writebuff = bytearray(data)
+        self.writelen = len(self.writebuff)
+        await self.connectWrite()
+
+        data = self.Xbee.xbeeTransmitRemoteCommand(self.Xbee.buildAddress(self.macAddress), 'A', 'C', '')        # apply changes
+        self.writebuff = bytearray(data)
+        self.writelen = len(self.writebuff)
+        await self.connectWrite()
+
+        data = self.Xbee.xbeeTransmitRemoteCommand(self.Xbee.buildAddress(self.macAddress), 'W', 'R', '')        # write to eeprom
+        self.writebuff = bytearray(data)
+        self.writelen = len(self.writebuff)
+        await self.connectWrite()
+
     async def change_ptidaddr(self, widget):
         ptidaddr = str(self.app.widgets[PTIDV].value)
         data = chr(SETPROTOADDRESS) + ptiaddr + '234567890123456789'
@@ -1080,15 +1081,15 @@ class PTApp(toga.App):
         await self.sendDataBuffer(data)
 
     async def change_OutputX(self, widget):
-        outFunc  = str(self.app.widgets[OUTXF].value)
-        outValue = str(self.app.widgets[OUTXS].value)
-        data = chr(SETOUTPUTSMODE) + chr(0) + chr(outFunc) + chr(outValue) + '5678901201234567'
+        outFunc  = int(self.app.widgets[OUTXF].value)
+        outValue = int(self.app.widgets[OUTXS].value)
+        data = chr(SETOUTPUTSMODE) + chr(1) + chr(outFunc) + chr(outValue) + '5678901201234567'
         await self.sendDataBuffer(data)
 
     async def change_OutputY(self, widget):
-        outFunc  = str(self.app.widgets[OUTYF].value)
-        outValue = str(self.app.widgets[OUTYS].value)
-        data = chr(SETOUTPUTSMODE) + chr(1) + chr(outFunc) + chr(outValue) + '5678901201234567'
+        outFunc  = int(self.app.widgets[OUTYF].value)
+        outValue = int(self.app.widgets[OUTYS].value)
+        data = chr(SETOUTPUTSMODE) + chr(0) + chr(outFunc) + chr(outValue) + '5678901201234567'
         await self.sendDataBuffer(data)
 
 
@@ -1112,13 +1113,11 @@ class PTApp(toga.App):
     def callMainWidgetWindow(self, widget):
         self.displayMainWidgetScreen(widget, self.message)
 
-
-
-
+##
+########################################################
+##
     async def callServoScreen(self, widget):
-
         retries = 0
-
         while retries < 2:
            data = chr(GETPHYSICS) + "000000000000000000"
            buff = self.Xbee.buildXbeeTransmitData(self.Xbee.buildAddress(self.macAddress), data)
@@ -1141,18 +1140,50 @@ class PTApp(toga.App):
         return
 
 
-    def callPhysicsScreen(self, widget):
+##
+#############################################################
+##
+    async def callPhysicsScreen(self, widget):
         self.displayPhysicsScreen(self.buttonSave, self.message)
 
-    def callNotchesScreen(self, widget):
-        self.displayNotchesScreen(self.buttonSave, self.message)
 
 
-    #####################################################################
+##
+############################################################
+##
+    async def callNotchesScreen(self, widget):
+        print ("callNotchesScreen")
+        retries = 0
+        while retries < 2:
+           data = chr(RETURNNOTCHES) + "000000000000000000"
+           buff = self.Xbee.buildXbeeTransmitData(self.Xbee.buildAddress(self.macAddress), data)
 
-    # Servo Configure Screen
+           self.writebuff = bytearray(buff)
+           self.writelen = len(self.writebuff)
+ 
+           await self.connectWrite()
+           await asyncio.sleep(1)
+           await self.connectRead()
+
+           print ("retries ", retries)
+
+           self.notches = await self.parseReturnData(len(self.readbuff), self.readbuff, 87)
+
+           if self.notches != []:
+              print ("displayNotchesScreen")
+              self.displayNotchesScreen(self.buttonSave, self.notches)
+              return
+           else:
+              retries = retries + 1
+        return
+
+
+##
+########################################################################
+### Servo Configure Screen
+##
+
     def displayServoScreen(self, button, message, pymessage):
-
         MARGINTOP = 2
         LNUMWIDTH = 64
         SNUMWIDTH = 42
@@ -1404,14 +1435,9 @@ class PTApp(toga.App):
         self.main_window.content = self.scroller
         self.main_window.show()
 
-
     ##
     ### Set data routines
     ##
-
-    def setNothing(self, widget):
-        pass
-
 
     async def handle_brakeRate(self, widget):
         brakerate = str(self.app.widgets[BRATEV].value)
@@ -1429,10 +1455,6 @@ class PTApp(toga.App):
     async def handle_deceleration(self, widget):
         pass
 
- 
-    async def setLimit(self, widget):
-        method = self.servohandlers[widget.id]
-        await method()
         
     async def handleServo0(self):
         if self.app.widgets[SV0R].value:
@@ -1507,9 +1529,9 @@ class PTApp(toga.App):
         boxrowB = toga.Box(children=[title1, title2, title3], style=Pack(direction=ROW, align_items=END, margin_top=2))
         scan_content.add(boxrowB)
 
-        inlow = 0
-        inhigh = 0
-        output = 0
+        inlow  = message[11]
+        inhigh = message[12]
+        output = message[13]
 
         desc   = toga.Label("Notch 1", style=Pack(width=120, align_items=END, font_size=16))
         ntinl  = toga.NumberInput(id=NTINL1, value=inlow, min=0, max=99, style=Pack(text_align=RIGHT, margin_right=10, height=48, width=48, font_size=18, background_color="#eeeeee", color="#000000"))
@@ -1519,6 +1541,10 @@ class PTApp(toga.App):
         boxrow = toga.Box(children=[desc, ntinl, ntinh, ntout, btn], style=Pack(direction=ROW, align_items=END, margin_top=1))
         scan_content.add(boxrow)
 
+        inlow  = message[14]
+        inhigh = message[15]
+        output = message[16]
+
         desc   = toga.Label("Notch 2", style=Pack(width=120, align_items=END, font_size=16))
         ntinl  = toga.NumberInput(id=NTINL2, value=inlow, min=0, max=99, style=Pack(text_align=RIGHT, margin_right=10, height=48, width=48, font_size=18, background_color="#eeeeee", color="#000000"))
         ntinh  = toga.NumberInput(id=NTINH2, value=inhigh, min=0, max=99, style=Pack(text_align=RIGHT, margin_right=10, height=48, width=48, font_size=18, background_color="#eeeeee", color="#000000"))
@@ -1526,6 +1552,10 @@ class PTApp(toga.App):
         btn    = toga.Button(id=NTPRG2, text="Prg", on_press = self.handle_notchChange, style=Pack(width=55, height=55, margin_top=6, margin_right=5, background_color="#bbbbbb", color="#000000", font_size=12))
         boxrow = toga.Box(children=[desc, ntinl, ntinh, ntout, btn], style=Pack(direction=ROW, align_items=END, margin_top=1))
         scan_content.add(boxrow)
+
+        inlow  = message[17]
+        inhigh = message[18]
+        output = message[19]
 
         desc   = toga.Label("Notch 3", style=Pack(width=120, align_items=END, font_size=16))
         ntinl  = toga.NumberInput(id=NTINL3, value=inlow, min=0, max=99, style=Pack(text_align=RIGHT, margin_right=10, height=48, width=48, font_size=18, background_color="#eeeeee", color="#000000"))
@@ -1535,6 +1565,10 @@ class PTApp(toga.App):
         boxrow = toga.Box(children=[desc, ntinl, ntinh, ntout, btn], style=Pack(direction=ROW, align_items=END, margin_top=1))
         scan_content.add(boxrow)
 
+        inlow  = message[20]
+        inhigh = message[21]
+        output = message[22]
+
         desc   = toga.Label("Notch 4", style=Pack(width=120, align_items=END, font_size=16))
         ntinl  = toga.NumberInput(id=NTINL4, value=inlow, min=0, max=99, style=Pack(text_align=RIGHT, margin_right=10, height=48, width=48, font_size=18, background_color="#eeeeee", color="#000000"))
         ntinh  = toga.NumberInput(id=NTINH4, value=inhigh, min=0, max=99, style=Pack(text_align=RIGHT, margin_right=10, height=48, width=48, font_size=18, background_color="#eeeeee", color="#000000"))
@@ -1542,6 +1576,10 @@ class PTApp(toga.App):
         btn    = toga.Button(id=NTPRG4, text="Prg", on_press = self.handle_notchChange, style=Pack(width=55, height=55, margin_top=6, margin_right=5, background_color="#bbbbbb", color="#000000", font_size=12))
         boxrow = toga.Box(children=[desc, ntinl, ntinh, ntout, btn], style=Pack(direction=ROW, align_items=END, margin_top=1))
         scan_content.add(boxrow)
+
+        inlow  = message[23]
+        inhigh = message[24]
+        output = message[25]
 
         desc   = toga.Label("Notch 5", style=Pack(width=120, align_items=END, font_size=16))
         ntinl  = toga.NumberInput(id=NTINL5, value=inlow, min=0, max=99, style=Pack(text_align=RIGHT, margin_right=10, height=48, width=48, font_size=18, background_color="#eeeeee", color="#000000"))
@@ -1551,6 +1589,10 @@ class PTApp(toga.App):
         boxrow = toga.Box(children=[desc, ntinl, ntinh, ntout, btn], style=Pack(direction=ROW, align_items=END, margin_top=1))
         scan_content.add(boxrow)
 
+        inlow  = message[26]
+        inhigh = message[27]
+        output = message[28]
+
         desc   = toga.Label("Notch 6", style=Pack(width=120, align_items=END, font_size=16))
         ntinl  = toga.NumberInput(id=NTINL6, value=inlow, min=0, max=99, style=Pack(text_align=RIGHT, margin_right=10, height=48, width=48, font_size=18, background_color="#eeeeee", color="#000000"))
         ntinh  = toga.NumberInput(id=NTINH6, value=inhigh, min=0, max=99, style=Pack(text_align=RIGHT, margin_right=10, height=48, width=48, font_size=18, background_color="#eeeeee", color="#000000"))
@@ -1559,6 +1601,10 @@ class PTApp(toga.App):
         boxrow = toga.Box(children=[desc, ntinl, ntinh, ntout, btn], style=Pack(direction=ROW, align_items=END, margin_top=1))
         scan_content.add(boxrow)
 
+        inlow  = message[29]
+        inhigh = message[30]
+        output = message[31]
+
         desc   = toga.Label("Notch 7", style=Pack(width=120, align_items=END, font_size=16))
         ntinl  = toga.NumberInput(id=NTINL7, value=inlow, min=0, max=99, style=Pack(text_align=RIGHT, margin_right=10, height=48, width=48, font_size=18, background_color="#eeeeee", color="#000000"))
         ntinh  = toga.NumberInput(id=NTINH7, value=inhigh, min=0, max=99, style=Pack(text_align=RIGHT, margin_right=10, height=48, width=48, font_size=18, background_color="#eeeeee", color="#000000"))
@@ -1566,6 +1612,10 @@ class PTApp(toga.App):
         btn    = toga.Button(id=NTPRG7, text="Prg", on_press = self.handle_notchChange, style=Pack(width=55, height=55, margin_top=6, margin_right=5, background_color="#bbbbbb", color="#000000", font_size=12))
         boxrow = toga.Box(children=[desc, ntinl, ntinh, ntout, btn], style=Pack(direction=ROW, align_items=END, margin_top=1))
         scan_content.add(boxrow)
+
+        inlow  = message[32]
+        inhigh = message[33]
+        output = message[34]
 
         desc   = toga.Label("Notch 8", style=Pack(width=120, align_items=END, font_size=16))
         ntinl  = toga.NumberInput(id=NTINL8, value=inlow, min=0, max=99, style=Pack(text_align=RIGHT, margin_right=10, height=48, width=48, font_size=18, background_color="#eeeeee", color="#000000"))
