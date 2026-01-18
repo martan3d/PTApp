@@ -3,6 +3,7 @@ Protothrottle Receiver App
 """
 
 import toga
+import sys
 import asyncio
 from toga.style import Pack
 from toga import Button, MultilineTextInput, Label, TextInput
@@ -188,8 +189,22 @@ class PTApp(toga.App):
 
         self.Xbee = xbeeController()
         self.main_window = toga.MainWindow(title=self.formal_name)
-        self.setupAndroidSerialPort()
-        self.displayMainWindow(0)
+        if self.setupAndroidSerialPort():
+           self.displayMainWindow(0)
+        else:
+           self.displayErrorWindow()
+
+##
+## Error window if no Xbee Dongle is found
+##
+
+    def displayErrorWindow(self):
+        self.working_text = Label("No Xbee Dongle Found, Please Exit Program", style=Pack(font_size=14, color="#000000"))
+        scan_content = toga.Box(style=Pack(direction=COLUMN, align_items=CENTER, margin_top=25))
+        scan_content.add(self.working_text)
+        self.scroller = toga.ScrollContainer(content=scan_content, style=Pack(direction=COLUMN, align_items=CENTER))
+        self.main_window.content = self.scroller
+        self.main_window.show()
 
 ##
 ## Main window, construct it here, make it's parts available to this class
@@ -210,14 +225,14 @@ class PTApp(toga.App):
         scan_content.add(self.discover_button)
         scan_content.add(self.working_text)
 
-        throttle = Button(
-            'Throttle',
-            on_press=self.callThrottleScreen,
-            style=Pack(width=120, height=60, margin_top=10, background_color="#cccccc", color="#000000", font_size=12)
-        )
+#        throttle = Button(
+#            'Throttle',
+#            on_press=self.callThrottleScreen,
+#            style=Pack(width=120, height=60, margin_top=10, background_color="#cccccc", color="#000000", font_size=12)
+#        )
 
-        boxrow = toga.Box(children=[throttle], style=Pack(direction=ROW, align_items=CENTER, margin_top=20))
-        scan_content.add(boxrow)
+#        boxrow = toga.Box(children=[throttle], style=Pack(direction=ROW, align_items=CENTER, margin_top=20))
+#        scan_content.add(boxrow)
 
         self.scroller = toga.ScrollContainer(content=scan_content, style=Pack(direction=COLUMN, align_items=CENTER))
         self.main_window.content = self.scroller
@@ -286,9 +301,9 @@ class PTApp(toga.App):
 
         # if we have tried > 2 times and no answer, probably not a receiver, look for a protothrottle
         if self.retries > 1:
-           self.retries = 0
-           self.working_text.text = "Searching for Protothrottle..."
-           await self.getProtothrottle()
+#           self.retries = 0
+#           self.working_text.text = "Searching for Protothrottle..."
+#           await self.getProtothrottle()
            return
 
         # assume it's a receiver
@@ -311,7 +326,7 @@ class PTApp(toga.App):
         self.macAddress = widget.id
 
         if not self.message:   # generally don't get it on the first try, just let user try again...
-           self.working_text.text = "Failed, try again, third retry looks for Protothrottle"
+           self.working_text.text = "Failed, please try again"
            self.retries = self.retries + 1
            await asyncio.sleep(0.75)
            self.working_text.text = ""
@@ -495,6 +510,12 @@ class PTApp(toga.App):
 
         return []
 
+
+    async def show_error_dialog(self):
+        await self.main_window.dialog(ErrorDialog("An error occurred"))
+        # Or, to display app-modal:
+        # await self.app.dialog(ErrorDialog("An error occurred", f"Details: {e}"))
+
 ##
 ## Android open serial port, will fail if no Dongle detected
 ##
@@ -507,13 +528,18 @@ class PTApp(toga.App):
 
         # Check to see if Xbee device is connected, should only be one
         iterator = self.usbDevices.entrySet().iterator()
+        self.device = None
+
         while iterator.hasNext():
            entry = iterator.next()
            self.device = entry.getValue()
 
+        print ("self.device:", self.device)
+        if self.device == None:
+           return False
+
         # Check USB Permissions, get them if needed, this does not return if you don't accept
         self.checkPermission()
-
         self.connection = self.usbmanager.openDevice(self.device)
         self.interface = self.device.getInterface(0)
         self.readEndpoint = self.interface.getEndpoint(0)
@@ -542,6 +568,7 @@ class PTApp(toga.App):
                  )
 
         print ("PORT INITIALIZED AND OPEN")
+        return True
 
 ##
 ## check for permission from the user and wait if required
@@ -1154,7 +1181,7 @@ class PTApp(toga.App):
     async def callNotchesScreen(self, widget):
         print ("callNotchesScreen")
         retries = 0
-        while retries < 2:
+        while retries < 3:
            data = chr(RETURNNOTCHES) + "000000000000000000"
            buff = self.Xbee.buildXbeeTransmitData(self.Xbee.buildAddress(self.macAddress), data)
 
@@ -1165,9 +1192,13 @@ class PTApp(toga.App):
            await asyncio.sleep(1)
            await self.connectRead()
 
-           print ("retries ", retries)
+           self.notches = await self.parseReturnData(len(self.readbuff), self.readbuff, 78)
 
-           self.notches = await self.parseReturnData(len(self.readbuff), self.readbuff, 87)
+           s = ""
+           for c in self.notches:
+               s = s + hex(c) + " "
+     
+           print ("notch data return ", s)
 
            if self.notches != []:
               print ("displayNotchesScreen")
@@ -1534,9 +1565,9 @@ class PTApp(toga.App):
         output = message[13]
 
         desc   = toga.Label("Notch 1", style=Pack(width=120, align_items=END, font_size=16))
-        ntinl  = toga.NumberInput(id=NTINL1, value=inlow, min=0, max=99, style=Pack(text_align=RIGHT, margin_right=10, height=48, width=48, font_size=18, background_color="#eeeeee", color="#000000"))
-        ntinh  = toga.NumberInput(id=NTINH1, value=inhigh, min=0, max=99, style=Pack(text_align=RIGHT, margin_right=10, height=48, width=48, font_size=18, background_color="#eeeeee", color="#000000"))
-        ntout  = toga.NumberInput(id=NTOUT1, value=inhigh, min=0, max=99, style=Pack(text_align=RIGHT, margin_right=10, height=48, width=48, font_size=18, background_color="#eeeeee", color="#000000"))
+        ntinl  = toga.NumberInput(id=NTINL1, value=inlow, min=0, max=199, style=Pack(text_align=RIGHT, margin_right=10, height=48, width=48, font_size=18, background_color="#eeeeee", color="#000000"))
+        ntinh  = toga.NumberInput(id=NTINH1, value=inhigh, min=0, max=199, style=Pack(text_align=RIGHT, margin_right=10, height=48, width=48, font_size=18, background_color="#eeeeee", color="#000000"))
+        ntout  = toga.NumberInput(id=NTOUT1, value=output, min=0, max=199, style=Pack(text_align=RIGHT, margin_right=10, height=48, width=48, font_size=18, background_color="#eeeeee", color="#000000"))
         btn    = toga.Button(id=NTPRG1, text="Prg", on_press = self.handle_notchChange, style=Pack(width=55, height=55, margin_top=6, margin_right=5, background_color="#bbbbbb", color="#000000", font_size=12))
         boxrow = toga.Box(children=[desc, ntinl, ntinh, ntout, btn], style=Pack(direction=ROW, align_items=END, margin_top=1))
         scan_content.add(boxrow)
@@ -1546,9 +1577,9 @@ class PTApp(toga.App):
         output = message[16]
 
         desc   = toga.Label("Notch 2", style=Pack(width=120, align_items=END, font_size=16))
-        ntinl  = toga.NumberInput(id=NTINL2, value=inlow, min=0, max=99, style=Pack(text_align=RIGHT, margin_right=10, height=48, width=48, font_size=18, background_color="#eeeeee", color="#000000"))
-        ntinh  = toga.NumberInput(id=NTINH2, value=inhigh, min=0, max=99, style=Pack(text_align=RIGHT, margin_right=10, height=48, width=48, font_size=18, background_color="#eeeeee", color="#000000"))
-        ntout  = toga.NumberInput(id=NTOUT2, value=inhigh, min=0, max=99, style=Pack(text_align=RIGHT, margin_right=10, height=48, width=48, font_size=18, background_color="#eeeeee", color="#000000"))
+        ntinl  = toga.NumberInput(id=NTINL2, value=inlow, min=0, max=199, style=Pack(text_align=RIGHT, margin_right=10, height=48, width=48, font_size=18, background_color="#eeeeee", color="#000000"))
+        ntinh  = toga.NumberInput(id=NTINH2, value=inhigh, min=0, max=199, style=Pack(text_align=RIGHT, margin_right=10, height=48, width=48, font_size=18, background_color="#eeeeee", color="#000000"))
+        ntout  = toga.NumberInput(id=NTOUT2, value=output, min=0, max=199, style=Pack(text_align=RIGHT, margin_right=10, height=48, width=48, font_size=18, background_color="#eeeeee", color="#000000"))
         btn    = toga.Button(id=NTPRG2, text="Prg", on_press = self.handle_notchChange, style=Pack(width=55, height=55, margin_top=6, margin_right=5, background_color="#bbbbbb", color="#000000", font_size=12))
         boxrow = toga.Box(children=[desc, ntinl, ntinh, ntout, btn], style=Pack(direction=ROW, align_items=END, margin_top=1))
         scan_content.add(boxrow)
@@ -1558,9 +1589,9 @@ class PTApp(toga.App):
         output = message[19]
 
         desc   = toga.Label("Notch 3", style=Pack(width=120, align_items=END, font_size=16))
-        ntinl  = toga.NumberInput(id=NTINL3, value=inlow, min=0, max=99, style=Pack(text_align=RIGHT, margin_right=10, height=48, width=48, font_size=18, background_color="#eeeeee", color="#000000"))
-        ntinh  = toga.NumberInput(id=NTINH3, value=inhigh, min=0, max=99, style=Pack(text_align=RIGHT, margin_right=10, height=48, width=48, font_size=18, background_color="#eeeeee", color="#000000"))
-        ntout  = toga.NumberInput(id=NTOUT3, value=inhigh, min=0, max=99, style=Pack(text_align=RIGHT, margin_right=10, height=48, width=48, font_size=18, background_color="#eeeeee", color="#000000"))
+        ntinl  = toga.NumberInput(id=NTINL3, value=inlow, min=0, max=199, style=Pack(text_align=RIGHT, margin_right=10, height=48, width=48, font_size=18, background_color="#eeeeee", color="#000000"))
+        ntinh  = toga.NumberInput(id=NTINH3, value=inhigh, min=0, max=199, style=Pack(text_align=RIGHT, margin_right=10, height=48, width=48, font_size=18, background_color="#eeeeee", color="#000000"))
+        ntout  = toga.NumberInput(id=NTOUT3, value=output, min=0, max=199, style=Pack(text_align=RIGHT, margin_right=10, height=48, width=48, font_size=18, background_color="#eeeeee", color="#000000"))
         btn    = toga.Button(id=NTPRG3, text="Prg", on_press = self.handle_notchChange, style=Pack(width=55, height=55, margin_top=6, margin_right=5, background_color="#bbbbbb", color="#000000", font_size=12))
         boxrow = toga.Box(children=[desc, ntinl, ntinh, ntout, btn], style=Pack(direction=ROW, align_items=END, margin_top=1))
         scan_content.add(boxrow)
@@ -1570,9 +1601,9 @@ class PTApp(toga.App):
         output = message[22]
 
         desc   = toga.Label("Notch 4", style=Pack(width=120, align_items=END, font_size=16))
-        ntinl  = toga.NumberInput(id=NTINL4, value=inlow, min=0, max=99, style=Pack(text_align=RIGHT, margin_right=10, height=48, width=48, font_size=18, background_color="#eeeeee", color="#000000"))
-        ntinh  = toga.NumberInput(id=NTINH4, value=inhigh, min=0, max=99, style=Pack(text_align=RIGHT, margin_right=10, height=48, width=48, font_size=18, background_color="#eeeeee", color="#000000"))
-        ntout  = toga.NumberInput(id=NTOUT4, value=inhigh, min=0, max=99, style=Pack(text_align=RIGHT, margin_right=10, height=48, width=48, font_size=18, background_color="#eeeeee", color="#000000"))
+        ntinl  = toga.NumberInput(id=NTINL4, value=inlow, min=0, max=199, style=Pack(text_align=RIGHT, margin_right=10, height=48, width=48, font_size=18, background_color="#eeeeee", color="#000000"))
+        ntinh  = toga.NumberInput(id=NTINH4, value=inhigh, min=0, max=199, style=Pack(text_align=RIGHT, margin_right=10, height=48, width=48, font_size=18, background_color="#eeeeee", color="#000000"))
+        ntout  = toga.NumberInput(id=NTOUT4, value=output, min=0, max=199, style=Pack(text_align=RIGHT, margin_right=10, height=48, width=48, font_size=18, background_color="#eeeeee", color="#000000"))
         btn    = toga.Button(id=NTPRG4, text="Prg", on_press = self.handle_notchChange, style=Pack(width=55, height=55, margin_top=6, margin_right=5, background_color="#bbbbbb", color="#000000", font_size=12))
         boxrow = toga.Box(children=[desc, ntinl, ntinh, ntout, btn], style=Pack(direction=ROW, align_items=END, margin_top=1))
         scan_content.add(boxrow)
@@ -1582,9 +1613,9 @@ class PTApp(toga.App):
         output = message[25]
 
         desc   = toga.Label("Notch 5", style=Pack(width=120, align_items=END, font_size=16))
-        ntinl  = toga.NumberInput(id=NTINL5, value=inlow, min=0, max=99, style=Pack(text_align=RIGHT, margin_right=10, height=48, width=48, font_size=18, background_color="#eeeeee", color="#000000"))
-        ntinh  = toga.NumberInput(id=NTINH5, value=inhigh, min=0, max=99, style=Pack(text_align=RIGHT, margin_right=10, height=48, width=48, font_size=18, background_color="#eeeeee", color="#000000"))
-        ntout  = toga.NumberInput(id=NTOUT5, value=inhigh, min=0, max=99, style=Pack(text_align=RIGHT, margin_right=10, height=48, width=48, font_size=18, background_color="#eeeeee", color="#000000"))
+        ntinl  = toga.NumberInput(id=NTINL5, value=inlow, min=0, max=199, style=Pack(text_align=RIGHT, margin_right=10, height=48, width=48, font_size=18, background_color="#eeeeee", color="#000000"))
+        ntinh  = toga.NumberInput(id=NTINH5, value=inhigh, min=0, max=199, style=Pack(text_align=RIGHT, margin_right=10, height=48, width=48, font_size=18, background_color="#eeeeee", color="#000000"))
+        ntout  = toga.NumberInput(id=NTOUT5, value=output, min=0, max=199, style=Pack(text_align=RIGHT, margin_right=10, height=48, width=48, font_size=18, background_color="#eeeeee", color="#000000"))
         btn    = toga.Button(id=NTPRG5, text="Prg", on_press = self.handle_notchChange, style=Pack(width=55, height=55, margin_top=6, margin_right=5, background_color="#bbbbbb", color="#000000", font_size=12))
         boxrow = toga.Box(children=[desc, ntinl, ntinh, ntout, btn], style=Pack(direction=ROW, align_items=END, margin_top=1))
         scan_content.add(boxrow)
@@ -1594,9 +1625,9 @@ class PTApp(toga.App):
         output = message[28]
 
         desc   = toga.Label("Notch 6", style=Pack(width=120, align_items=END, font_size=16))
-        ntinl  = toga.NumberInput(id=NTINL6, value=inlow, min=0, max=99, style=Pack(text_align=RIGHT, margin_right=10, height=48, width=48, font_size=18, background_color="#eeeeee", color="#000000"))
-        ntinh  = toga.NumberInput(id=NTINH6, value=inhigh, min=0, max=99, style=Pack(text_align=RIGHT, margin_right=10, height=48, width=48, font_size=18, background_color="#eeeeee", color="#000000"))
-        ntout  = toga.NumberInput(id=NTOUT6, value=inhigh, min=0, max=99, style=Pack(text_align=RIGHT, margin_right=10, height=48, width=48, font_size=18, background_color="#eeeeee", color="#000000"))
+        ntinl  = toga.NumberInput(id=NTINL6, value=inlow, min=0, max=199, style=Pack(text_align=RIGHT, margin_right=10, height=48, width=48, font_size=18, background_color="#eeeeee", color="#000000"))
+        ntinh  = toga.NumberInput(id=NTINH6, value=inhigh, min=0, max=199, style=Pack(text_align=RIGHT, margin_right=10, height=48, width=48, font_size=18, background_color="#eeeeee", color="#000000"))
+        ntout  = toga.NumberInput(id=NTOUT6, value=output, min=0, max=199, style=Pack(text_align=RIGHT, margin_right=10, height=48, width=48, font_size=18, background_color="#eeeeee", color="#000000"))
         btn    = toga.Button(id=NTPRG6, text="Prg", on_press = self.handle_notchChange, style=Pack(width=55, height=55, margin_top=6, margin_right=5, background_color="#bbbbbb", color="#000000", font_size=12))
         boxrow = toga.Box(children=[desc, ntinl, ntinh, ntout, btn], style=Pack(direction=ROW, align_items=END, margin_top=1))
         scan_content.add(boxrow)
@@ -1606,9 +1637,9 @@ class PTApp(toga.App):
         output = message[31]
 
         desc   = toga.Label("Notch 7", style=Pack(width=120, align_items=END, font_size=16))
-        ntinl  = toga.NumberInput(id=NTINL7, value=inlow, min=0, max=99, style=Pack(text_align=RIGHT, margin_right=10, height=48, width=48, font_size=18, background_color="#eeeeee", color="#000000"))
-        ntinh  = toga.NumberInput(id=NTINH7, value=inhigh, min=0, max=99, style=Pack(text_align=RIGHT, margin_right=10, height=48, width=48, font_size=18, background_color="#eeeeee", color="#000000"))
-        ntout  = toga.NumberInput(id=NTOUT7, value=inhigh, min=0, max=99, style=Pack(text_align=RIGHT, margin_right=10, height=48, width=48, font_size=18, background_color="#eeeeee", color="#000000"))
+        ntinl  = toga.NumberInput(id=NTINL7, value=inlow, min=0, max=199, style=Pack(text_align=RIGHT, margin_right=10, height=48, width=48, font_size=18, background_color="#eeeeee", color="#000000"))
+        ntinh  = toga.NumberInput(id=NTINH7, value=inhigh, min=0, max=199, style=Pack(text_align=RIGHT, margin_right=10, height=48, width=48, font_size=18, background_color="#eeeeee", color="#000000"))
+        ntout  = toga.NumberInput(id=NTOUT7, value=output, min=0, max=199, style=Pack(text_align=RIGHT, margin_right=10, height=48, width=48, font_size=18, background_color="#eeeeee", color="#000000"))
         btn    = toga.Button(id=NTPRG7, text="Prg", on_press = self.handle_notchChange, style=Pack(width=55, height=55, margin_top=6, margin_right=5, background_color="#bbbbbb", color="#000000", font_size=12))
         boxrow = toga.Box(children=[desc, ntinl, ntinh, ntout, btn], style=Pack(direction=ROW, align_items=END, margin_top=1))
         scan_content.add(boxrow)
@@ -1618,9 +1649,9 @@ class PTApp(toga.App):
         output = message[34]
 
         desc   = toga.Label("Notch 8", style=Pack(width=120, align_items=END, font_size=16))
-        ntinl  = toga.NumberInput(id=NTINL8, value=inlow, min=0, max=99, style=Pack(text_align=RIGHT, margin_right=10, height=48, width=48, font_size=18, background_color="#eeeeee", color="#000000"))
-        ntinh  = toga.NumberInput(id=NTINH8, value=inhigh, min=0, max=99, style=Pack(text_align=RIGHT, margin_right=10, height=48, width=48, font_size=18, background_color="#eeeeee", color="#000000"))
-        ntout  = toga.NumberInput(id=NTOUT8, value=inhigh, min=0, max=99, style=Pack(text_align=RIGHT, margin_right=10, height=48, width=48, font_size=18, background_color="#eeeeee", color="#000000"))
+        ntinl  = toga.NumberInput(id=NTINL8, value=inlow, min=0, max=199, style=Pack(text_align=RIGHT, margin_right=10, height=48, width=48, font_size=18, background_color="#eeeeee", color="#000000"))
+        ntinh  = toga.NumberInput(id=NTINH8, value=inhigh, min=0, max=199, style=Pack(text_align=RIGHT, margin_right=10, height=48, width=48, font_size=18, background_color="#eeeeee", color="#000000"))
+        ntout  = toga.NumberInput(id=NTOUT8, value=output, min=0, max=199, style=Pack(text_align=RIGHT, margin_right=10, height=48, width=48, font_size=18, background_color="#eeeeee", color="#000000"))
         btn    = toga.Button(id=NTPRG8, text="Prg", on_press = self.handle_notchChange, style=Pack(width=55, height=55, margin_top=6, margin_right=5, background_color="#bbbbbb", color="#000000", font_size=12))
         boxrow = toga.Box(children=[desc, ntinl, ntinh, ntout, btn], style=Pack(direction=ROW, align_items=END, margin_top=1))
         scan_content.add(boxrow)
