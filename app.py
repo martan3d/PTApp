@@ -179,6 +179,10 @@ adprot = { 0x30 :'A', 0x31 :'B', 0x32 :'C', 0x33 :'D', 0x34 :'E', 0x35 :'F', 0x3
            0x3a : 'K', 0x3b : 'L', 0x3c : 'M', 0x3d : 'N', 0x3e : 'O', 0x3f : 'P', 0x40 : 'Q', 0x41 : 'R', 0x42 : 'S',
            0x43 : 'T', 0x44 : 'U', 0x45 : 'V', 0x46 : 'W', 0x47 : 'X', 0x48 : 'Y', 0x49 : 'Z' }
 
+protad = { 'A': 0x30, 'B': 0x31, 'C': 0x32, 'D': 0x33, 'E': 0x34, 'F': 0x35, 'G': 0x36, 'H': 0x37, 'I': 0x38,
+           'J': 0x39, 'K': 0x3a, 'L': 0x3b, 'M': 0x3c, 'N': 0x3d, 'O': 0x3e, 'P': 0x3f,
+           'Q': 0x40, 'R': 0x41, 'S': 0x42, 'T': 0x43, 'U': 0x44, 'V': 0x45, 'W': 0x46, 'X': 0x47, 'Y': 0x48, 'Z': 0x49 }
+
 ##
 ## Main Toga Class and startup
 ##
@@ -955,12 +959,12 @@ class PTApp(toga.App):
         boxrow = toga.Box(children=[desc, passth, entry, btn], style=Pack(direction=ROW, align_items=END, margin_top=MARGINTOP))
         scan_content.add(boxrow)
 
-        wdog = chr(message[11])   # pull watchdog value from received message
+        wdog = int(message[34])   # pull watchdog value from received message
 
         # WatchDog
         btn    = toga.Button(id=WDOG, text="Prg", on_press = self.change_WatchDog, style=Pack(width=55, height=55, margin_top=6, background_color="#bbbbbb", color="#000000", font_size=12))
         desc   = toga.Label("Watch Dog", style=Pack(width=265, align_items=END, font_size=18))
-        entry  = toga.TextInput(id=WDOGV, value=wdog, style=Pack(text_align=RIGHT, height=45, justify_content="center", width=SNUMWIDTH, margin_bottom=2, font_size=18, background_color="#eeeeee", color="#000000"))
+        entry  = toga.NumberInput(id=WDOGV, value=wdog, style=Pack(text_align=RIGHT, height=45, justify_content="center", width=SNUMWIDTH, margin_bottom=2, font_size=18, background_color="#eeeeee", color="#000000"))
         boxrow = toga.Box(children=[desc, entry, btn], style=Pack(direction=ROW, align_items=END, margin_top=MARGINTOP))
         scan_content.add(boxrow)
 
@@ -970,8 +974,8 @@ class PTApp(toga.App):
         # output X
         btn    = toga.Button(id=OUTX, text="Prg", on_press = self.change_OutputX, style=Pack(width=55, height=55, margin_top=6, background_color="#bbbbbb", color="#000000", font_size=12))
         desc   = toga.Label("Output X", style=Pack(width=220, align_items=END, font_size=18))
-        entry0 = toga.TextInput(id=OUTXF, value=outxfn, style=Pack(text_align=RIGHT, height=45, width=SNUMWIDTH, margin_bottom=2, font_size=18, background_color="#eeeeee", color="#000000"))
-        entry1 = toga.TextInput(id=OUTXS, value=outx, style=Pack(text_align=RIGHT, height=45, width=SNUMWIDTH, margin_bottom=2, margin_left=4, font_size=18, background_color="#eeeeee", color="#000000"))
+        entry0 = toga.NumberInput(id=OUTXF, value=outxfn, style=Pack(text_align=RIGHT, height=45, width=SNUMWIDTH, margin_bottom=2, font_size=18, background_color="#eeeeee", color="#000000"))
+        entry1 = toga.NumberInput(id=OUTXS, value=outx, style=Pack(text_align=RIGHT, height=45, width=SNUMWIDTH, margin_bottom=2, margin_left=4, font_size=18, background_color="#eeeeee", color="#000000"))
         boxrow = toga.Box(children=[desc, entry0, entry1, btn], style=Pack(direction=ROW, align_items=END, margin_top=MARGINTOP))
         scan_content.add(boxrow)
 
@@ -981,8 +985,8 @@ class PTApp(toga.App):
         # output Y
         btn    = toga.Button(id=OUTY, text="Prg", on_press = self.change_OutputY, style=Pack(width=55, height=55, margin_top=6, background_color="#bbbbbb", color="#000000", font_size=12))
         desc   = toga.Label("Output Y", style=Pack(width=220, align_items=END, font_size=18))
-        entry0 = toga.TextInput(id=OUTYF, value=outyfn, style=Pack(text_align=RIGHT, height=45, width=SNUMWIDTH, margin_bottom=2, font_size=18, background_color="#eeeeee", color="#000000"))
-        entry1 = toga.TextInput(id=OUTYS, value=outy, style=Pack(text_align=RIGHT, height=45, width=SNUMWIDTH, margin_bottom=2, margin_left=4, font_size=18, background_color="#eeeeee", color="#000000"))
+        entry0 = toga.NumberInput(id=OUTYF, value=outyfn, style=Pack(text_align=RIGHT, height=45, width=SNUMWIDTH, margin_bottom=2, font_size=18, background_color="#eeeeee", color="#000000"))
+        entry1 = toga.NumberInput(id=OUTYS, value=outy, style=Pack(text_align=RIGHT, height=45, width=SNUMWIDTH, margin_bottom=2, margin_left=4, font_size=18, background_color="#eeeeee", color="#000000"))
         boxrow = toga.Box(children=[desc, entry0, entry1, btn], style=Pack(direction=ROW, align_items=END, margin_top=MARGINTOP))
         scan_content.add(boxrow)
 
@@ -1044,8 +1048,9 @@ class PTApp(toga.App):
         await self.connectWrite()
 
     async def change_ptidaddr(self, widget):
-        ptidaddr = str(self.app.widgets[PTIDV].value)
-        data = chr(SETPROTOADDRESS) + ptiaddr + '234567890123456789'
+        addrpt = self.app.widgets[PTIDV].value
+        ptidaddr = protad[addrpt.upper()]
+        data = chr(SETPROTOADDRESS) + chr(ptidaddr) + '234567890123456789'
         await self.sendDataBuffer(data)
 
     async def change_ptidbase(self, widget):
@@ -1104,7 +1109,8 @@ class PTApp(toga.App):
 
     async def change_WatchDog(self, widget):
         wdog = int(self.app.widgets[WDOGV].value)
-        dat  = chr(SETTIMEOUT) + chr(wdv) + '345678901201234567'
+        data  = chr(SETTIMEOUT) + chr(wdog) + '345678901201234567'
+        print (data)
         await self.sendDataBuffer(data)
 
     async def change_OutputX(self, widget):
