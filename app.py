@@ -1484,12 +1484,27 @@ class PTApp(toga.App):
         await self.sendDataBuffer(data)
 
     async def handle_brakeFuncCode(self, widget):
+        funccode = str(self.app.widgets[BFNCV].value)
+        s = "000" + funccode
+        s = s[-3:]
+        data = chr(SETBRAKEFUNCTION) + s[2] + s[1] + s[0] + '5678901201234567'
+        await self.sendDataBuffer(data)
         pass
 
     async def handle_acceleration(self, widget):
+        accel = str(self.app.widgets[ACCLV].value)
+        s = "000" + accel
+        s = s[-3:]
+        data = chr(SETACCELERATION) + s[2] + s[1] + s[0] + '5678901201234567'
+        await self.sendDataBuffer(data)
         pass
 
     async def handle_deceleration(self, widget):
+        decel = str(self.app.widgets[DECLV].value)
+        s = "000" + decel
+        s = s[-3:]
+        data = chr(SETDECELERATION) + s[2] + s[1] + s[0] + '5678901201234567'
+        await self.sendDataBuffer(data)
         pass
 
         
