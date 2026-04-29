@@ -1589,7 +1589,7 @@ class PTApp(toga.App):
         ntinl  = toga.NumberInput(id=NTINL1, value=inlow, min=0, max=199, style=Pack(text_align=RIGHT, margin_right=10, height=48, width=48, font_size=18, background_color="#eeeeee", color="#000000"))
         ntinh  = toga.NumberInput(id=NTINH1, value=inhigh, min=0, max=199, style=Pack(text_align=RIGHT, margin_right=10, height=48, width=48, font_size=18, background_color="#eeeeee", color="#000000"))
         ntout  = toga.NumberInput(id=NTOUT1, value=output, min=0, max=199, style=Pack(text_align=RIGHT, margin_right=10, height=48, width=48, font_size=18, background_color="#eeeeee", color="#000000"))
-        btn    = toga.Button(id=NTPRG1, text="Prg", on_press = self.handle_notchChange, style=Pack(width=55, height=55, margin_top=6, margin_right=5, background_color="#bbbbbb", color="#000000", font_size=12))
+        btn    = toga.Button(id=NTPRG1, text="Prg", on_press = self.handle_notch1, style=Pack(width=55, height=55, margin_top=6, margin_right=5, background_color="#bbbbbb", color="#000000", font_size=12))
         boxrow = toga.Box(children=[desc, ntinl, ntinh, ntout, btn], style=Pack(direction=ROW, align_items=END, margin_top=1))
         scan_content.add(boxrow)
 
@@ -1601,7 +1601,7 @@ class PTApp(toga.App):
         ntinl  = toga.NumberInput(id=NTINL2, value=inlow, min=0, max=199, style=Pack(text_align=RIGHT, margin_right=10, height=48, width=48, font_size=18, background_color="#eeeeee", color="#000000"))
         ntinh  = toga.NumberInput(id=NTINH2, value=inhigh, min=0, max=199, style=Pack(text_align=RIGHT, margin_right=10, height=48, width=48, font_size=18, background_color="#eeeeee", color="#000000"))
         ntout  = toga.NumberInput(id=NTOUT2, value=output, min=0, max=199, style=Pack(text_align=RIGHT, margin_right=10, height=48, width=48, font_size=18, background_color="#eeeeee", color="#000000"))
-        btn    = toga.Button(id=NTPRG2, text="Prg", on_press = self.handle_notchChange, style=Pack(width=55, height=55, margin_top=6, margin_right=5, background_color="#bbbbbb", color="#000000", font_size=12))
+        btn    = toga.Button(id=NTPRG2, text="Prg", on_press = self.handle_notch2, style=Pack(width=55, height=55, margin_top=6, margin_right=5, background_color="#bbbbbb", color="#000000", font_size=12))
         boxrow = toga.Box(children=[desc, ntinl, ntinh, ntout, btn], style=Pack(direction=ROW, align_items=END, margin_top=1))
         scan_content.add(boxrow)
 
@@ -1613,7 +1613,7 @@ class PTApp(toga.App):
         ntinl  = toga.NumberInput(id=NTINL3, value=inlow, min=0, max=199, style=Pack(text_align=RIGHT, margin_right=10, height=48, width=48, font_size=18, background_color="#eeeeee", color="#000000"))
         ntinh  = toga.NumberInput(id=NTINH3, value=inhigh, min=0, max=199, style=Pack(text_align=RIGHT, margin_right=10, height=48, width=48, font_size=18, background_color="#eeeeee", color="#000000"))
         ntout  = toga.NumberInput(id=NTOUT3, value=output, min=0, max=199, style=Pack(text_align=RIGHT, margin_right=10, height=48, width=48, font_size=18, background_color="#eeeeee", color="#000000"))
-        btn    = toga.Button(id=NTPRG3, text="Prg", on_press = self.handle_notchChange, style=Pack(width=55, height=55, margin_top=6, margin_right=5, background_color="#bbbbbb", color="#000000", font_size=12))
+        btn    = toga.Button(id=NTPRG3, text="Prg", on_press = self.handle_notch3, style=Pack(width=55, height=55, margin_top=6, margin_right=5, background_color="#bbbbbb", color="#000000", font_size=12))
         boxrow = toga.Box(children=[desc, ntinl, ntinh, ntout, btn], style=Pack(direction=ROW, align_items=END, margin_top=1))
         scan_content.add(boxrow)
 
@@ -1625,7 +1625,7 @@ class PTApp(toga.App):
         ntinl  = toga.NumberInput(id=NTINL4, value=inlow, min=0, max=199, style=Pack(text_align=RIGHT, margin_right=10, height=48, width=48, font_size=18, background_color="#eeeeee", color="#000000"))
         ntinh  = toga.NumberInput(id=NTINH4, value=inhigh, min=0, max=199, style=Pack(text_align=RIGHT, margin_right=10, height=48, width=48, font_size=18, background_color="#eeeeee", color="#000000"))
         ntout  = toga.NumberInput(id=NTOUT4, value=output, min=0, max=199, style=Pack(text_align=RIGHT, margin_right=10, height=48, width=48, font_size=18, background_color="#eeeeee", color="#000000"))
-        btn    = toga.Button(id=NTPRG4, text="Prg", on_press = self.handle_notchChange, style=Pack(width=55, height=55, margin_top=6, margin_right=5, background_color="#bbbbbb", color="#000000", font_size=12))
+        btn    = toga.Button(id=NTPRG4, text="Prg", on_press = self.handle_notch4, style=Pack(width=55, height=55, margin_top=6, margin_right=5, background_color="#bbbbbb", color="#000000", font_size=12))
         boxrow = toga.Box(children=[desc, ntinl, ntinh, ntout, btn], style=Pack(direction=ROW, align_items=END, margin_top=1))
         scan_content.add(boxrow)
 
@@ -1637,7 +1637,7 @@ class PTApp(toga.App):
         ntinl  = toga.NumberInput(id=NTINL5, value=inlow, min=0, max=199, style=Pack(text_align=RIGHT, margin_right=10, height=48, width=48, font_size=18, background_color="#eeeeee", color="#000000"))
         ntinh  = toga.NumberInput(id=NTINH5, value=inhigh, min=0, max=199, style=Pack(text_align=RIGHT, margin_right=10, height=48, width=48, font_size=18, background_color="#eeeeee", color="#000000"))
         ntout  = toga.NumberInput(id=NTOUT5, value=output, min=0, max=199, style=Pack(text_align=RIGHT, margin_right=10, height=48, width=48, font_size=18, background_color="#eeeeee", color="#000000"))
-        btn    = toga.Button(id=NTPRG5, text="Prg", on_press = self.handle_notchChange, style=Pack(width=55, height=55, margin_top=6, margin_right=5, background_color="#bbbbbb", color="#000000", font_size=12))
+        btn    = toga.Button(id=NTPRG5, text="Prg", on_press = self.handle_notch5, style=Pack(width=55, height=55, margin_top=6, margin_right=5, background_color="#bbbbbb", color="#000000", font_size=12))
         boxrow = toga.Box(children=[desc, ntinl, ntinh, ntout, btn], style=Pack(direction=ROW, align_items=END, margin_top=1))
         scan_content.add(boxrow)
 
@@ -1649,7 +1649,7 @@ class PTApp(toga.App):
         ntinl  = toga.NumberInput(id=NTINL6, value=inlow, min=0, max=199, style=Pack(text_align=RIGHT, margin_right=10, height=48, width=48, font_size=18, background_color="#eeeeee", color="#000000"))
         ntinh  = toga.NumberInput(id=NTINH6, value=inhigh, min=0, max=199, style=Pack(text_align=RIGHT, margin_right=10, height=48, width=48, font_size=18, background_color="#eeeeee", color="#000000"))
         ntout  = toga.NumberInput(id=NTOUT6, value=output, min=0, max=199, style=Pack(text_align=RIGHT, margin_right=10, height=48, width=48, font_size=18, background_color="#eeeeee", color="#000000"))
-        btn    = toga.Button(id=NTPRG6, text="Prg", on_press = self.handle_notchChange, style=Pack(width=55, height=55, margin_top=6, margin_right=5, background_color="#bbbbbb", color="#000000", font_size=12))
+        btn    = toga.Button(id=NTPRG6, text="Prg", on_press = self.handle_notch6, style=Pack(width=55, height=55, margin_top=6, margin_right=5, background_color="#bbbbbb", color="#000000", font_size=12))
         boxrow = toga.Box(children=[desc, ntinl, ntinh, ntout, btn], style=Pack(direction=ROW, align_items=END, margin_top=1))
         scan_content.add(boxrow)
 
@@ -1661,7 +1661,7 @@ class PTApp(toga.App):
         ntinl  = toga.NumberInput(id=NTINL7, value=inlow, min=0, max=199, style=Pack(text_align=RIGHT, margin_right=10, height=48, width=48, font_size=18, background_color="#eeeeee", color="#000000"))
         ntinh  = toga.NumberInput(id=NTINH7, value=inhigh, min=0, max=199, style=Pack(text_align=RIGHT, margin_right=10, height=48, width=48, font_size=18, background_color="#eeeeee", color="#000000"))
         ntout  = toga.NumberInput(id=NTOUT7, value=output, min=0, max=199, style=Pack(text_align=RIGHT, margin_right=10, height=48, width=48, font_size=18, background_color="#eeeeee", color="#000000"))
-        btn    = toga.Button(id=NTPRG7, text="Prg", on_press = self.handle_notchChange, style=Pack(width=55, height=55, margin_top=6, margin_right=5, background_color="#bbbbbb", color="#000000", font_size=12))
+        btn    = toga.Button(id=NTPRG7, text="Prg", on_press = self.handle_notch7, style=Pack(width=55, height=55, margin_top=6, margin_right=5, background_color="#bbbbbb", color="#000000", font_size=12))
         boxrow = toga.Box(children=[desc, ntinl, ntinh, ntout, btn], style=Pack(direction=ROW, align_items=END, margin_top=1))
         scan_content.add(boxrow)
 
@@ -1673,7 +1673,7 @@ class PTApp(toga.App):
         ntinl  = toga.NumberInput(id=NTINL8, value=inlow, min=0, max=199, style=Pack(text_align=RIGHT, margin_right=10, height=48, width=48, font_size=18, background_color="#eeeeee", color="#000000"))
         ntinh  = toga.NumberInput(id=NTINH8, value=inhigh, min=0, max=199, style=Pack(text_align=RIGHT, margin_right=10, height=48, width=48, font_size=18, background_color="#eeeeee", color="#000000"))
         ntout  = toga.NumberInput(id=NTOUT8, value=output, min=0, max=199, style=Pack(text_align=RIGHT, margin_right=10, height=48, width=48, font_size=18, background_color="#eeeeee", color="#000000"))
-        btn    = toga.Button(id=NTPRG8, text="Prg", on_press = self.handle_notchChange, style=Pack(width=55, height=55, margin_top=6, margin_right=5, background_color="#bbbbbb", color="#000000", font_size=12))
+        btn    = toga.Button(id=NTPRG8, text="Prg", on_press = self.handle_notch8, style=Pack(width=55, height=55, margin_top=6, margin_right=5, background_color="#bbbbbb", color="#000000", font_size=12))
         boxrow = toga.Box(children=[desc, ntinl, ntinh, ntout, btn], style=Pack(direction=ROW, align_items=END, margin_top=1))
         scan_content.add(boxrow)
 
@@ -1699,10 +1699,73 @@ class PTApp(toga.App):
         self.main_window.content = self.scroller
         self.main_window.show()
 
+    async def handle_notch1(self, widget):
+        notchlow  = str(self.app.widgets[NTINL1].value)
+        notchhigh = str(self.app.widgets[NTINH1].value)
+        notchout  = str(self.app.widgets[NTOUT1].value)
+        await self.change_notch(1, notchlow, notchhigh, notchout)
+
+    async def handle_notch2(self, widget):
+        notchlow  = str(self.app.widgets[NTINL2].value)
+        notchhigh = str(self.app.widgets[NTINH2].value)
+        notchout  = str(self.app.widgets[NTOUT2].value)
+        await self.change_notch(2, notchlow, notchhigh, notchout)
+
+    async def handle_notch3(self, widget):
+        notchlow  = str(self.app.widgets[NTINL3].value)
+        notchhigh = str(self.app.widgets[NTINH3].value)
+        notchout  = str(self.app.widgets[NTOUT3].value)
+        await self.change_notch(3, notchlow, notchhigh, notchout)
+
+    async def handle_notch4(self, widget):
+        notchlow  = str(self.app.widgets[NTINL4].value)
+        notchhigh = str(self.app.widgets[NTINH4].value)
+        notchout  = str(self.app.widgets[NTOUT4].value)
+        await self.change_notch(4, notchlow, notchhigh, notchout)
+
+    async def handle_notch5(self, widget):
+        notchlow  = str(self.app.widgets[NTINL5].value)
+        notchhigh = str(self.app.widgets[NTINH5].value)
+        notchout  = str(self.app.widgets[NTOUT5].value)
+        await self.change_notch(5, notchlow, notchhigh, notchout)
 
 
-    async def handle_notchChange(self, widget):
-        pass
+    async def handle_notch6(self, widget):
+        notchlow  = str(self.app.widgets[NTINL6].value)
+        notchhigh = str(self.app.widgets[NTINH6].value)
+        notchout  = str(self.app.widgets[NTOUT6].value)
+        await self.change_notch(6, notchlow, notchhigh, notchout)
+
+
+    async def handle_notch7(self, widget):
+        notchlow  = str(self.app.widgets[NTINL7].value)
+        notchhigh = str(self.app.widgets[NTINH7].value)
+        notchout  = str(self.app.widgets[NTOUT7].value)
+        await self.change_notch(7, notchlow, notchhigh, notchout)
+
+    async def handle_notch8(self, widget):
+        notchlow  = str(self.app.widgets[NTINL8].value)
+        notchhigh = str(self.app.widgets[NTINH8].value)
+        notchout  = str(self.app.widgets[NTOUT8].value)
+        await self.change_notch(8, notchlow, notchhigh, notchout)
+
+
+    async def change_notch(self, notch, notchlow, notchhigh, notchout):
+        enabled = "1"
+
+        nhigh = "000" + notchhigh
+        nhigh = nhigh[-3:]
+
+        nlow = "000" + notchlow
+        nlow = nlow[-3:]
+
+        nval = "000" + notchout
+        nval = nval[-3:]
+
+        SETNOTCH = 50   ## 1        2        3       4         5         6         7         8         9        10        11         12
+        data = chr(SETNOTCH) + enabled + str(notch) + nval[0] + nval[1] + nval[2] + nlow[0] + nlow[1] + nlow[2] + nhigh[0] + nhigh[1] + nhigh[2] + '01234567'
+        await self.sendDataBuffer(data)
+
 
 
 
